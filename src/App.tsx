@@ -50,9 +50,20 @@ export default function App() {
   const [mapCenter, setMapCenter] = useState<[number, number]>([9.0222, 38.7469]);
   const [mapZoom, setMapZoom] = useState(14);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [panelHeight, setPanelHeight] = useState<'collapsed' | 'expanded' | 'full'>('collapsed');
   const [favorites, setFavorites] = useState<number[]>(() => {
     return JSON.parse(localStorage.getItem('ttFavs') || '[]');
   });
+  
+  // Update state when panelOpen prop changes from external sources
+  useEffect(() => {
+    if (panelOpen && panelHeight === 'collapsed') {
+      setPanelHeight('expanded');
+    }
+    if (!panelOpen && panelHeight !== 'collapsed') {
+      setPanelHeight('collapsed');
+    }
+  }, [panelOpen]);
 
   const t = TRANSLATIONS[lang];
 
@@ -129,7 +140,9 @@ export default function App() {
     setSelectedStation(station);
     setMapCenter([station.lat, station.lng]);
     setMapZoom(16);
-    setPanelOpen(false); // Hide the bottom panel when a station is selected
+    // Don't fully hide, just collapse
+    setPanelOpen(false);
+    setPanelHeight('collapsed');
   }, [mapCenter]);
 
   const handleLocateMe = useCallback(() => {
@@ -165,29 +178,63 @@ export default function App() {
 
   if (isSplash) {
     return (
-      <div className="fixed inset-0 z-[9999] bg-gradient-to-br from-primary-dark via-primary to-primary-light flex flex-col items-center justify-center gap-6">
+      <div className="fixed inset-0 z-[9999] bg-slate-900 flex flex-col items-center justify-center overflow-hidden">
         <motion.div 
-          initial={{ scale: 0.5, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: "spring", stiffness: 100 }}
-          className="w-40 h-40 bg-white/20 rounded-3xl p-4 backdrop-blur-md border border-white/30 flex items-center justify-center shadow-2xl"
+          initial={{ opacity: 0, scale: 0.8, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+          className="flex flex-col items-center gap-8"
         >
-          <Bus className="w-24 h-24 text-white" />
+          <motion.div 
+            animate={{ 
+              y: [0, -10, 0],
+              rotate: [0, 2, -2, 0]
+            }}
+            transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
+            className="w-40 h-40 bg-white/5 p-1.5 backdrop-blur-xl border border-white/10 flex items-center justify-center shadow-[0_0_50px_rgba(8,145,178,0.3)] rounded-[40px]"
+          >
+            <img 
+              src="https://github.com/Azgames724/Taxi-tera1.2/raw/main/Picsart_26-05-11_16-29-35-238.png" 
+              alt="Taxi Tera Logo"
+              className="w-full h-full object-cover rounded-[34px]"
+              referrerPolicy="no-referrer"
+            />
+          </motion.div>
+          <div className="text-center">
+            <motion.h1 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="text-4xl font-black text-white tracking-tight"
+            >
+              Taxi Tera
+            </motion.h1>
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.4 }}
+              className="text-cyan-400/80 font-bold text-xs uppercase tracking-[0.2em] mt-2"
+            >
+              {t.spSub}
+            </motion.p>
+          </div>
         </motion.div>
-        <div className="flex flex-col items-center">
-          <h1 className="text-4xl font-black text-white tracking-tighter">Taxi Tera</h1>
-          <p className="text-white/80 font-medium mt-1">{t.spSub}</p>
-        </div>
-        <div className="flex gap-2">
+        
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1 }}
+          className="absolute bottom-12 flex gap-1.5"
+        >
           {[0, 1, 2].map(i => (
             <motion.div 
               key={i}
-              animate={{ opacity: [0.3, 1, 0.3], scale: [1, 1.2, 1] }}
-              transition={{ repeat: Infinity, duration: 1, delay: i * 0.2 }}
-              className="w-2 h-2 bg-white rounded-full"
+              animate={{ opacity: [0.2, 1, 0.2], scale: [1, 1.4, 1] }}
+              transition={{ repeat: Infinity, duration: 1.5, delay: i * 0.2 }}
+              className="w-1.5 h-1.5 bg-cyan-500 rounded-full"
             />
           ))}
-        </div>
+        </motion.div>
       </div>
     );
   }
@@ -195,23 +242,23 @@ export default function App() {
   return (
     <div className="fixed inset-0 bg-slate-50 flex flex-col font-sans">
       {/* Search Header */}
-      <div className="absolute top-0 left-0 right-0 z-[1000] p-4 pointer-events-none">
-        <div className="max-w-md mx-auto flex flex-col gap-3">
+      <div className="absolute top-0 left-0 right-0 z-[1000] p-3 pointer-events-none">
+        <div className="max-w-md mx-auto flex flex-col gap-2">
           <div className="flex gap-2 pointer-events-auto">
-            <div className="flex-1 bg-white rounded-2xl shadow-strong border border-slate-200 p-1 flex items-center">
+            <div className="flex-1 bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-slate-200/50 p-0.5 flex items-center">
               <button 
                 onClick={() => setIsMenuOpen(true)}
-                className="p-3 text-slate-400 hover:text-primary transition-colors cursor-pointer"
+                className="p-2.5 text-slate-400 hover:text-primary transition-colors cursor-pointer"
               >
-                <Menu className="w-6 h-6" />
+                <Menu className="w-5 h-5" />
               </button>
               <div className="flex-1 flex items-center px-1">
-                <SearchIcon className="w-5 h-5 text-slate-300 mr-2" />
+                <SearchIcon className="w-4 h-4 text-slate-300 mr-2" />
                 <input 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={t.ph}
-                  className="bg-transparent border-none outline-none w-full text-sm font-medium"
+                  className="bg-transparent border-none outline-none w-full text-xs font-semibold"
                 />
                 {searchQuery && (
                   <button onClick={() => setSearchQuery('')} className="p-2 text-slate-300">
@@ -223,30 +270,30 @@ export default function App() {
             
             <button 
               onClick={() => setLang(l => l === 'en' ? 'am' : 'en')}
-              className="bg-white px-3 rounded-2xl shadow-strong border border-slate-200 font-bold text-xs text-primary h-14"
+              className="bg-white/95 backdrop-blur-sm px-2.5 rounded-xl shadow-lg border border-slate-200/50 font-black text-[10px] text-primary h-11"
             >
               {lang === 'en' ? 'AM' : 'EN'}
             </button>
           </div>
           
           {/* Quick Filters */}
-          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide pointer-events-auto">
-            <button className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-full text-xs font-bold shadow-md shrink-0">
-              <MapIcon className="w-3.5 h-3.5" />
+          <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide pointer-events-auto">
+            <button className="flex items-center gap-1.5 bg-primary text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md shrink-0">
+              <MapIcon className="w-3 h-3" />
               {t.all}
             </button>
             <button 
               onClick={() => { setActiveTab('stations'); setPanelOpen(true); }}
-              className="flex items-center gap-2 bg-white text-slate-600 border border-slate-200 px-4 py-2 rounded-full text-xs font-bold shadow-sm shrink-0"
+              className="flex items-center gap-1.5 bg-white/90 backdrop-blur-sm text-slate-600 border border-slate-200/50 px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-sm shrink-0"
             >
-              <Bus className="w-3.5 h-3.5" />
+              <Bus className="w-3 h-3" />
               {t.minibus}
             </button>
             <button 
               onClick={() => { setActiveTab('trips'); setPanelOpen(true); }}
-              className="flex items-center gap-2 bg-white text-slate-600 border border-slate-200 px-4 py-2 rounded-full text-xs font-bold shadow-sm shrink-0"
+              className="flex items-center gap-1.5 bg-white/90 backdrop-blur-sm text-slate-600 border border-slate-200/50 px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-sm shrink-0"
             >
-              <Navigation className="w-3.5 h-3.5 text-primary" />
+              <Navigation className="w-3 h-3 text-primary" />
               {t.planner}
             </button>
           </div>
@@ -267,12 +314,12 @@ export default function App() {
         />
 
         {/* Floating Actions */}
-        <div className="absolute bottom-32 right-4 z-40 flex flex-col gap-3">
+        <div className="absolute bottom-28 right-3 z-40 flex flex-col gap-2">
           <button 
             onClick={handleLocateMe}
-            className="w-14 h-14 bg-white rounded-2xl shadow-strong border border-slate-200 flex items-center justify-center text-primary group active:scale-90 transition-all"
+            className="w-11 h-11 bg-white/95 backdrop-blur-sm rounded-xl shadow-xl border border-slate-200/50 flex items-center justify-center text-primary group active:scale-90 transition-all"
           >
-            <Navigation className="w-7 h-7 group-hover:scale-110 transition-transform" />
+            <Navigation className="w-5 h-5 group-hover:rotate-12 transition-transform" />
           </button>
         </div>
       </div>
@@ -280,19 +327,56 @@ export default function App() {
       {/* Bottom Panel */}
       <motion.div 
         initial={false}
-        animate={{ height: panelOpen ? '65vh' : '110px' }}
-        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-        className="bg-white rounded-t-[32px] shadow-[0_-8px_32px_rgba(0,0,0,0.1)] z-[60] flex flex-col border-t border-slate-100 overflow-hidden shrink-0"
-      >
-        <div 
-          className="p-3 shrink-0 cursor-pointer flex flex-col items-center"
-          onClick={() => setPanelOpen(!panelOpen)}
-        >
-          <div className="w-12 h-1.5 bg-slate-200 rounded-full" />
-        </div>
+        animate={{ 
+          y: selectedStation ? '100%' : 0,
+          height: panelHeight === 'expanded' ? '60vh' : panelHeight === 'full' ? '92vh' : '110px'
+        }}
+        transition={{ type: 'spring', damping: 30, stiffness: 300, mass: 0.8 }}
+        drag={selectedStation ? false : "y"}
+        dragConstraints={{ top: 0, bottom: 0 }}
+        dragElastic={0.05}
+        onDragEnd={(_, info) => {
+          const velocity = info.velocity.y;
+          const offset = info.offset.y;
 
-        {/* Tabs */}
-        <div className="px-4 flex gap-2 shrink-0">
+          if (velocity > 400 || offset > 100) {
+            setPanelHeight('collapsed');
+            setPanelOpen(false);
+          } else if (velocity < -400 || offset < -100) {
+            setPanelHeight('full');
+            setPanelOpen(true);
+          } else if (Math.abs(offset) > 40) {
+            if (offset < 0) {
+              setPanelHeight(panelHeight === 'collapsed' ? 'expanded' : 'full');
+              setPanelOpen(true);
+            } else {
+              setPanelHeight(panelHeight === 'full' ? 'expanded' : 'collapsed');
+              if (panelHeight === 'expanded') setPanelOpen(false);
+            }
+          }
+        }}
+        className={cn(
+          "fixed inset-x-0 bottom-0 bg-white rounded-t-[32px] shadow-[0_-8px_40px_rgba(0,0,0,0.12)] flex flex-col border-t border-slate-100 overflow-hidden",
+          panelHeight === 'full' ? "z-[1100]" : "z-[60]"
+        )}
+      >
+            <div 
+              className="p-2.5 shrink-0 cursor-grab active:cursor-grabbing flex flex-col items-center"
+              onClick={() => {
+                if (panelHeight === 'collapsed') {
+                  setPanelHeight('expanded');
+                  setPanelOpen(true);
+                } else {
+                  setPanelHeight('collapsed');
+                  setPanelOpen(false);
+                }
+              }}
+            >
+              <div className="w-10 h-1 bg-slate-200 rounded-full" />
+            </div>
+
+            {/* Tabs */}
+            <div className="px-3 flex gap-2 shrink-0">
           {[
             { id: 'stations', label: t.stations, icon: Bus },
             { id: 'trips', label: t.planner, icon: Navigation }
@@ -301,65 +385,66 @@ export default function App() {
               key={tab.id}
               onClick={() => { setActiveTab(tab.id as any); setPanelOpen(true); }}
               className={cn(
-                "flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-xs transition-all",
+                "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-black text-[10px] uppercase tracking-wider transition-all",
                 activeTab === tab.id 
-                  ? "bg-primary text-white shadow-md shadow-primary/20" 
-                  : "bg-slate-50 text-slate-500 hover:bg-slate-100"
+                  ? "bg-primary text-white shadow-lg shadow-primary/20" 
+                  : "bg-slate-50 text-slate-400 hover:bg-slate-100"
               )}
             >
-              <tab.icon className="w-4 h-4" />
+              <tab.icon className="w-3.5 h-3.5" />
               {tab.label}
             </button>
           ))}
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 scrollbar-hide">
-          <AnimatePresence mode="wait">
+        <div className="flex-1 overflow-y-auto px-4 py-4 scrollbar-hide pb-20">
+          <AnimatePresence mode="wait" initial={false}>
             {activeTab === 'stations' ? (
               <motion.div 
                 key="stations"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
                 className="flex flex-col gap-6"
               >
                 {/* Major Stations */}
-                <div className="flex flex-col gap-3">
-                  <div className="flex items-center justify-between px-1 mb-1">
-                    <h3 className="text-lg font-black text-slate-800">{t.nearTitle}</h3>
-                    <span className="text-xs font-bold text-primary bg-primary-pale px-2 py-1 rounded-lg">
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between px-1">
+                    <h3 className="text-base font-black text-slate-800">{t.nearTitle}</h3>
+                    <span className="text-[10px] font-black text-primary bg-primary/5 px-2 py-1 rounded-md">
                       {filteredStations.length} {t.found}
                     </span>
                   </div>
                   {filteredStations.map((s, idx) => (
                     <motion.div 
                       key={`station-${s.id}`}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: idx * 0.05 }}
+                      initial={{ opacity: 0, scale: 0.98 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: idx * 0.03 }}
                       onClick={() => handleStationClick(s)}
-                      className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-primary/30 transition-all cursor-pointer group"
+                      className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-100 hover:border-primary/20 hover:bg-slate-50/50 transition-all cursor-pointer group"
                     >
-                      <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-2xl shadow-sm border border-slate-100">
+                      <div className="w-10 h-10 bg-slate-50 rounded-lg flex items-center justify-center text-xl shadow-sm border border-slate-100 shrink-0">
                         {s.t === 'minibus' ? '🚌' : s.t === 'bajaj' ? '🛺' : '🚗'}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="font-bold text-slate-800 truncate">{lang === 'am' ? s.am : s.name}</div>
-                        <div className="text-[10px] text-slate-400 font-medium uppercase tracking-wider mt-0.5">
+                        <div className="font-bold text-sm text-slate-800 truncate">{lang === 'am' ? s.am : s.name}</div>
+                        <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mt-0.5 truncate">
                           {s.addr}
                         </div>
                       </div>
-                      <div className="flex flex-col items-end gap-1">
-                        <div className="text-xs font-black text-primary">★ {s.rat}</div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <div className="text-[11px] font-black text-primary">★ {s.rat}</div>
                         <button 
                           onClick={(e) => { e.stopPropagation(); toggleFavorite(s.id); }}
                           className={cn(
-                            "transition-colors",
+                            "transition-transform active:scale-90",
                             favorites.includes(s.id) ? "text-amber-400" : "text-slate-200"
                           )}
                         >
-                          <Star className={cn("w-5 h-5", favorites.includes(s.id) && "fill-current")} />
+                          <Star className={cn("w-4 h-4", favorites.includes(s.id) && "fill-current")} />
                         </button>
                       </div>
                     </motion.div>
@@ -367,27 +452,24 @@ export default function App() {
                 </div>
 
                 {/* All Routes */}
-                <div className="flex flex-col gap-3">
-                  <div className="flex items-center justify-between px-1 mb-1">
-                    <h3 className="text-lg font-black text-slate-800">{t.routes}</h3>
-                    <span className="text-xs font-bold text-slate-400">
-                      {filteredRoutes.length} Total
-                    </span>
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between px-1">
+                    <h3 className="text-base font-black text-slate-800">{t.routes}</h3>
                   </div>
                   {filteredRoutes.slice(0, 30).map((r, idx) => (
                     <div 
                       key={`route-${idx}`}
                       onClick={() => handleStationClick(r.from)}
-                      className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-primary/30 transition-all cursor-pointer"
+                      className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-100 hover:border-primary/20 transition-all cursor-pointer"
                     >
-                      <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center text-amber-500 border border-amber-100">
-                        <Bus className="w-5 h-5" />
+                      <div className="w-9 h-9 bg-amber-50 rounded-lg flex items-center justify-center text-amber-500 border border-amber-100 shrink-0">
+                        <Bus className="w-4 h-4" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="font-bold text-slate-800 truncate">{r.name}</div>
-                        <div className="text-xs text-slate-400 truncate">{r.from} → {r.to}</div>
+                        <div className="font-bold text-sm text-slate-800 truncate">{r.name}</div>
+                        <div className="text-[10px] text-slate-400 truncate">{r.from} → {r.to}</div>
                       </div>
-                      <div className="text-[10px] font-black bg-amber-100 text-amber-700 px-2 py-1 rounded-lg border border-amber-200">
+                      <div className="text-[9px] font-black bg-amber-50 text-amber-600 px-2 py-1 rounded-md border border-amber-100">
                         {r.code}
                       </div>
                     </div>
@@ -397,9 +479,10 @@ export default function App() {
             ) : (
               <motion.div 
                 key="trips"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
               >
                 <TripPlanner 
                   lang={lang} 
@@ -414,107 +497,135 @@ export default function App() {
         </div>
       </motion.div>
 
-      {/* Station Detail Modal */}
+      {/* Station Detail Modal (Bottom Sheet style) */}
       <AnimatePresence>
         {selectedStation && (
-          <motion.div 
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed inset-0 z-[100] bg-slate-50 flex flex-col"
-          >
-            <div className="h-48 bg-gradient-to-br from-primary-dark to-primary-light flex items-center justify-center relative shadow-lg">
-              <button 
-                onClick={() => setSelectedStation(null)}
-                className="absolute top-6 left-6 p-2 bg-white/20 backdrop-blur-md rounded-xl text-white border border-white/20"
-              >
-                <ChevronLeft className="w-6 h-6" />
-              </button>
-              <button 
-                onClick={() => toggleFavorite(selectedStation.id)}
-                className="absolute top-6 right-6 p-2 bg-white/20 backdrop-blur-md rounded-xl text-white border border-white/20"
-              >
-                <Star className={cn("w-6 h-6", favorites.includes(selectedStation.id) && "fill-amber-400 text-amber-400")} />
-              </button>
-              
-              <div className="w-24 h-24 bg-white/20 backdrop-blur-md rounded-3xl border border-white/30 flex items-center justify-center text-5xl shadow-2xl">
-                {selectedStation.t === 'minibus' ? '🚌' : selectedStation.t === 'bajaj' ? '🛺' : '🚗'}
-              </div>
-            </div>
-
-            <div className="flex-1 -mt-8 bg-slate-50 rounded-t-[32px] p-6 shadow-2xl overflow-y-auto">
-              <div>
-                <h2 className="text-2xl font-black text-slate-800">{lang === 'am' ? selectedStation.am : selectedStation.name}</h2>
-                <p className="text-slate-500 font-medium mt-1">{lang === 'am' ? selectedStation.addrAm : selectedStation.addr}</p>
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedStation(null)}
+              className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100]"
+            />
+            <motion.div 
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: "spring", damping: 30, stiffness: 300, mass: 0.8 }}
+              drag="y"
+              dragConstraints={{ top: 0 }}
+              dragElastic={0.1}
+              onDragEnd={(_, info) => {
+                if (info.offset.y > 150 || info.velocity.y > 500) {
+                  setSelectedStation(null);
+                }
+              }}
+              className="fixed inset-x-0 bottom-0 z-[101] bg-slate-50 flex flex-col rounded-t-[40px] shadow-2xl max-h-[92vh] overflow-hidden"
+            >
+              {/* Drag Handle */}
+              <div className="w-full flex justify-center p-3 shrink-0 cursor-grab active:cursor-grabbing">
+                <div className="w-12 h-1.5 bg-slate-300 rounded-full" />
               </div>
 
-              <div className="grid grid-cols-3 gap-4 mt-8">
-                <div className="bg-white p-3 rounded-2xl border border-slate-200 text-center shadow-sm">
-                  <div className="text-primary font-black text-lg">★ {selectedStation.rat}</div>
-                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">Rating</div>
-                </div>
-                <div className="bg-white p-3 rounded-2xl border border-slate-200 text-center shadow-sm">
-                  <div className="text-primary font-black text-lg">{selectedStation.r.length}</div>
-                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">Services</div>
-                </div>
-                <div className="bg-white p-3 rounded-2xl border border-slate-200 text-center shadow-sm">
-                  <div className="text-primary font-black text-lg">24/7</div>
-                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">Availability</div>
-                </div>
-              </div>
-
-              <div className="mt-8">
-                <h3 className="text-xs font-black text-primary uppercase tracking-widest mb-4">Routes from here</h3>
-                <div className="flex flex-wrap gap-2">
-                  {selectedStation.r.map(r => (
-                    <span key={r} className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 shadow-sm">
-                      {r}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mt-8">
-                <h3 className="text-xs font-black text-primary uppercase tracking-widest mb-4">Operating Hours</h3>
-                <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100 overflow-hidden shadow-sm">
-                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, idx) => (
-                    <div key={day} className="flex justify-between p-4 text-sm">
-                      <span className="font-bold text-slate-500">{day}</span>
-                      <span className="font-black text-slate-800">{selectedStation.h[idx]}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex gap-4 mt-8 mb-8">
+              <div className="h-40 bg-gradient-to-br from-primary-dark to-primary-light flex items-center justify-center relative shrink-0">
                 <button 
-                  onClick={() => {
-                    setPlannerInitialState({ origin: selectedStation.name });
-                    setActiveTab('trips');
-                    setPanelOpen(true);
-                    setSelectedStation(null);
-                  }}
-                  className="flex-1 py-4 bg-primary text-white rounded-2xl font-black text-sm shadow-xl shadow-primary/30 active:scale-95 transition-all flex items-center justify-center gap-2"
+                  onClick={() => setSelectedStation(null)}
+                  className="absolute top-4 left-6 p-2 bg-white/20 backdrop-blur-md rounded-xl text-white border border-white/20 active:scale-90 transition-transform"
                 >
-                  <Navigation className="w-5 h-5" />
-                  Routes from Here
+                  <X className="w-6 h-6" />
                 </button>
                 <button 
-                  onClick={() => {
-                    setPlannerInitialState({ dest: selectedStation.name });
-                    setActiveTab('trips');
-                    setPanelOpen(true);
-                    setSelectedStation(null);
-                  }}
-                  className="flex-1 py-4 bg-white border-2 border-primary text-primary rounded-2xl font-black text-sm active:scale-95 transition-all flex items-center justify-center gap-2"
+                  onClick={() => toggleFavorite(selectedStation.id)}
+                  className="absolute top-4 right-6 p-2 bg-white/20 backdrop-blur-md rounded-xl text-white border border-white/20 active:scale-90 transition-transform"
                 >
-                  <MapPin className="w-5 h-5" />
-                  Directions To
+                  <Star className={cn("w-6 h-6", favorites.includes(selectedStation.id) && "fill-amber-400 text-amber-400")} />
                 </button>
+                
+                <div className="w-20 h-20 bg-white/20 backdrop-blur-md rounded-3xl border border-white/30 flex items-center justify-center text-4xl shadow-2xl">
+                  {selectedStation.t === 'minibus' ? '🚌' : selectedStation.t === 'bajaj' ? '🛺' : '🚗'}
+                </div>
               </div>
-            </div>
-          </motion.div>
+
+              <div className="flex-1 overflow-y-auto px-6 py-6 pb-12 scrollbar-hide">
+                <div>
+                  <h2 className="text-2xl font-black text-slate-800 tracking-tight">{lang === 'am' ? selectedStation.am : selectedStation.name}</h2>
+                  <p className="text-slate-500 font-medium mt-1">{lang === 'am' ? selectedStation.addrAm : selectedStation.addr}</p>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 mt-4">
+                  <div className="bg-white p-2 rounded-xl border border-slate-100 text-center shadow-sm">
+                    <div className="text-primary font-black text-base">★ {selectedStation.rat}</div>
+                    <div className="text-[8px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Rating</div>
+                  </div>
+                  <div className="bg-white p-2 rounded-xl border border-slate-100 text-center shadow-sm">
+                    <div className="text-primary font-black text-base">{selectedStation.r.length}</div>
+                    <div className="text-[8px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Routes</div>
+                  </div>
+                  <div className="bg-white p-2 rounded-xl border border-slate-100 text-center shadow-sm">
+                    <div className="text-primary font-black text-base">24/7</div>
+                    <div className="text-[8px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Status</div>
+                  </div>
+                </div>
+
+                <div className="mt-8">
+                  <div className="flex items-center gap-2 mb-4">
+                    <RouteIcon className="w-4 h-4 text-primary" />
+                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">Planned Routes</h3>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedStation.r.map(r => (
+                      <span key={r} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-600 shadow-sm">
+                        {r}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-8">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Clock className="w-4 h-4 text-primary" />
+                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">Operating Hours</h3>
+                  </div>
+                  <div className="bg-white rounded-2xl border border-slate-100 divide-y divide-slate-50 overflow-hidden shadow-sm">
+                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, idx) => (
+                      <div key={day} className="flex justify-between p-3.5 text-sm">
+                        <span className="font-bold text-slate-400">{day}</span>
+                        <span className="font-black text-slate-700">{selectedStation.h[idx]}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-3 mt-8">
+                  <button 
+                    onClick={() => {
+                      setPlannerInitialState({ origin: selectedStation.name });
+                      setActiveTab('trips');
+                      setPanelOpen(true);
+                      setSelectedStation(null);
+                    }}
+                    className="w-full py-4 bg-primary text-white rounded-2xl font-black text-sm shadow-xl shadow-primary/30 active:scale-95 transition-all flex items-center justify-center gap-2"
+                  >
+                    <Navigation className="w-5 h-5 fill-white" />
+                    Set as Start Point
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setPlannerInitialState({ dest: selectedStation.name });
+                      setActiveTab('trips');
+                      setPanelOpen(true);
+                      setSelectedStation(null);
+                    }}
+                    className="w-full py-4 bg-white border-2 border-primary text-primary rounded-2xl font-black text-sm active:scale-95 transition-all flex items-center justify-center gap-2"
+                  >
+                    <MapPin className="w-5 h-5 fill-primary" />
+                    Navigate to Here
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
 

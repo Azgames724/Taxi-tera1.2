@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useEffect, useMemo, Fragment, memo, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, useMap, Polyline } from 'react-leaflet';
+import { useEffect, useMemo, Fragment, memo, useRef, useState } from 'react';
+import { MapContainer, TileLayer, Marker, useMap, Polyline, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import MarkerClusterGroup from 'react-leaflet-cluster';
@@ -101,6 +101,13 @@ function MapUpdater({ center, zoom, activePath, panelOpen }: { center: [number, 
   return null;
 }
 
+function ZoomTracker({ onZoomChange }: { onZoomChange: (z: number) => void }) {
+  const map = useMapEvents({
+    zoomend: () => onZoomChange(map.getZoom())
+  });
+  return null;
+}
+
 const userIcon = L.divIcon({
   html: '<div class="user-dot"></div>',
   className: '',
@@ -108,10 +115,12 @@ const userIcon = L.divIcon({
   iconAnchor: [12, 12]
 });
 
-const minibusIcon = L.divIcon({
+const minibusIcon = (showIcon?: boolean, count?: number) => L.divIcon({
   html: `
-    <div style="background: #0891B2; width: 34px; height: 34px; border-radius: 50% 50% 50% 5px; transform: rotate(-45deg); border: 2px solid white; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
-      <span style="transform: rotate(45deg); display: block; font-size: 16px;">🚌</span>
+    <div style="background: white; width: 34px; height: 34px; border-radius: 50% 50% 50% 5px; transform: rotate(-45deg); border: 2.5px solid #0891B2; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+      <div style="transform: rotate(45deg); display: flex; align-items: center; justify-content: center; font-size: ${showIcon ? '14px' : '11px'}; font-weight: 900; color: #0891B2; font-family: system-ui;">
+        ${showIcon ? '🚌' : (count || 3)}
+      </div>
     </div>
   `,
   className: '',
@@ -119,10 +128,10 @@ const minibusIcon = L.divIcon({
   iconAnchor: [17, 34]
 });
 
-const routeIcon = L.divIcon({
+const routeIcon = (isStart?: boolean) => L.divIcon({
   html: `
-    <div style="background: #F59E0B; width: 32px; height: 32px; border-radius: 50%; border: 3px solid white; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.3); animation: bounce 1s infinite alternate;">
-      <span style="font-size: 16px;">🚕</span>
+    <div style="background: ${isStart ? '#0891B2' : '#F59E0B'}; width: 32px; height: 32px; border-radius: 50%; border: 3px solid white; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.3); animation: bounce 1s infinite alternate;">
+      <span style="font-size: 16px;">${isStart ? '🚌' : '🚕'}</span>
     </div>
   `,
   className: '',
@@ -135,14 +144,27 @@ const mapStyles = `
     from { transform: translateY(0); }
     to { transform: translateY(-4px); }
   }
+  .marker-cluster-small, .marker-cluster-medium, .marker-cluster-large {
+    background-color: rgba(8, 145, 178, 0.4) !important;
+  }
+  .marker-cluster-small div, .marker-cluster-medium div, .marker-cluster-large div {
+    background-color: rgba(8, 145, 178, 0.8) !important;
+    color: white !important;
+    font-weight: 900 !important;
+    font-size: 14px !important;
+  }
 `;
 
 const Map = memo(({ center, zoom, userLocation, activePath, onStationClick, lang, panelOpen }: MapProps) => {
   const locations = useMemo(() => Object.entries(COORDS), []);
+  const stationData = useMemo(() => STATIONS, []);
+  const [currentZoom, setCurrentZoom] = useState(zoom);
 
   const handleMarkerClick = useMemo(() => (name: string, pos: [number, number]) => {
     onStationClick(name);
   }, [onStationClick]);
+
+  const showStationIcons = currentZoom >= 16;
 
   return (
     <div className="w-full h-full relative z-0">
@@ -163,29 +185,34 @@ const Map = memo(({ center, zoom, userLocation, activePath, onStationClick, lang
           opacity={1.0}
         />
         <MapUpdater center={center} zoom={zoom} activePath={activePath} panelOpen={panelOpen} />
+        <ZoomTracker onZoomChange={setCurrentZoom} />
         
         {userLocation && (
           <Marker position={userLocation} icon={userIcon} zIndexOffset={3000} />
         )}
 
         <MarkerClusterGroup
-          maxClusterRadius={40}
-          disableClusteringAtZoom={14}
+          maxClusterRadius={60}
+          disableClusteringAtZoom={15}
           showCoverageOnHover={false}
+          spiderfyOnMaxZoom={true}
         >
-          {locations.map(([name, pos]) => (
-            <Marker 
-              key={`loc-${name}`}
-              position={pos} 
-              icon={minibusIcon}
-              eventHandlers={{ click: () => handleMarkerClick(name, pos) }}
-            />
-          ))}
+          {locations.map(([name, pos], index) => {
+            const station = stationData.find(s => s.name === name);
+            return (
+              <Marker 
+                key={`loc-${name}-${showStationIcons ? 'icon' : 'num'}`}
+                position={pos} 
+                icon={minibusIcon(showStationIcons, station?.r.length || (index % 5 + 2))}
+                eventHandlers={{ click: () => handleMarkerClick(name, pos) }}
+              />
+            );
+          })}
         </MarkerClusterGroup>
 
         {/* Route visualization for the active path */}
         {activePath ? (
-          <Fragment key={`active-path-${activePath.legs.length}-${activePath.legs.map(l => l.from).join('-')}`}>
+          <Fragment key={`active-path-${activePath.legs.length}-${activePath.legs.map(l => l.from).join('-')}-${activePath.legs.some(l => !!l.geometry)}`}>
             {activePath.legs.map((leg, i) => {
               const fromCoord = COORDS[leg.from];
               const toCoord = COORDS[leg.to];
@@ -199,13 +226,13 @@ const Map = memo(({ center, zoom, userLocation, activePath, onStationClick, lang
                 <Fragment key={`leg-${i}-${leg.from}-${leg.to}`}>
                   <Marker 
                     position={fromCoord} 
-                    icon={routeIcon} 
+                    icon={routeIcon(i === 0)} 
                     zIndexOffset={4000 + i}
                   />
                   {i === activePath.legs.length - 1 && (
                     <Marker 
                       position={toCoord} 
-                      icon={routeIcon} 
+                      icon={routeIcon(false)} 
                       zIndexOffset={4000 + i + 1}
                     />
                   )}
@@ -214,19 +241,21 @@ const Map = memo(({ center, zoom, userLocation, activePath, onStationClick, lang
                     positions={positions} 
                     pathOptions={{ 
                       color: 'white', 
-                      weight: 12,
-                      opacity: 0.5,
-                      lineCap: 'round'
+                      weight: 10,
+                      opacity: 0.6,
+                      lineCap: 'round',
+                      lineJoin: 'round'
                     }} 
                   />
                   <Polyline 
                     positions={positions} 
                     pathOptions={{ 
                       color: i % 2 === 0 ? '#0891B2' : '#F59E0B', 
-                      weight: 6,
+                      weight: 5,
                       lineCap: 'round',
-                      opacity: 0.9,
-                      dashArray: leg.geometry ? undefined : '1, 10'
+                      lineJoin: 'round',
+                      opacity: 1,
+                      dashArray: leg.geometry ? undefined : '10, 10'
                     }} 
                   />
                   {/* Invisible wide polyline for easier clicks */}
