@@ -1,0 +1,36 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Outfit', ui-sans-serif, system-ui, sans-serif;
+  
+  --color-primary: #0891B2;
+  --color-primary-light: #06B6D4;
+  --color-primary-dark: #0E7490;
+  --color-primary-pale: #ECFEFF;
+  
+  --shadow-soft: 0 2px 8px rgba(0,0,0,.08), 0 4px 20px rgba(8,145,178,.1);
+  --shadow-strong: 0 4px 20px rgba(0,0,0,.12), 0 12px 40px rgba(8,145,178,.14);
+}
+
+@layer base {
+  html, body, #root {
+    @apply h-full overflow-hidden antialiased bg-slate-50 text-slate-900;
+  }
+}
+
+.leaflet-container {
+  @apply bg-[#e8f4f8] w-full h-full;
+}
+
+@keyframes upulse {
+  0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.55); }
+  70% { box-shadow: 0 0 0 12px rgba(59, 130, 246, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+}
+
+.user-dot {
+  @apply w-4 h-4 bg-blue-500 rounded-full border-3 border-white shadow-md;
+  animation: upulse 2s ease-out infinite;
+}
+

@@ -1,0 +1,8 @@
+{
+  "name": "Taxi Tera",
+  "description": "Transit guide for Ethiopia with route planning and navigation.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": []
+}
