@@ -629,47 +629,53 @@ export default function App() {
                 transition={{ duration: 0.2 }}
                 className="flex flex-col gap-6"
               >
-                {/* Major Stations */}
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between px-1">
-                    <h3 className="text-base font-black text-slate-800">{t.nearTitle}</h3>
-                    <span className="text-[10px] font-black text-primary bg-primary/5 px-2 py-1 rounded-md">
-                      {filteredStations.length} {t.found}
-                    </span>
-                  </div>
-                  {filteredStations.map((s, idx) => (
-                    <motion.div 
-                      key={`station-${s.id}`}
-                      initial={{ opacity: 0, scale: 0.98 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: idx * 0.03 }}
-                      onClick={() => handleStationClick(s)}
-                      className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-100 hover:border-primary/20 hover:bg-slate-50/50 transition-all cursor-pointer group"
-                    >
-                      <div className="w-10 h-10 bg-slate-50 rounded-lg flex items-center justify-center text-xl shadow-sm border border-slate-100 shrink-0">
-                        {s.t === 'minibus' ? '🚌' : s.t === 'bajaj' ? '🛺' : '🚗'}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-bold text-sm text-slate-800 truncate">{lang === 'am' ? s.am : s.name}</div>
-                        <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mt-0.5 truncate">
-                          {s.addr}
+                {/* Major Stations (Only shown when viewing Favorites) */}
+                {showFavsOnly && (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between px-1">
+                      <h3 className="text-base font-black text-slate-800">
+                        {lang === 'en' ? 'Saved Stations' : 'የተቀመጡ ጣቢያዎች'}
+                      </h3>
+                    </div>
+                    {filteredStations.map((s, idx) => (
+                      <motion.div 
+                        key={`station-${s.id}`}
+                        initial={{ opacity: 0, scale: 0.98 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: idx * 0.03 }}
+                        onClick={() => handleStationClick(s)}
+                        className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-100 hover:border-primary/20 hover:bg-slate-50/50 transition-all cursor-pointer group"
+                      >
+                        <div className="w-10 h-10 bg-slate-50 rounded-lg flex items-center justify-center text-xl shadow-sm border border-slate-100 shrink-0">
+                          {s.t === 'minibus' ? '🚌' : s.t === 'bajaj' ? '🛺' : '🚗'}
                         </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-bold text-sm text-slate-800 truncate">{lang === 'am' ? s.am : s.name}</div>
+                          <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mt-0.5 truncate">
+                            {s.addr}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <div className="text-[11px] font-black text-primary">★ {s.rat}</div>
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); toggleFavorite(s.id); }}
+                            className={cn(
+                              "transition-transform active:scale-90",
+                              favorites.includes(s.id) ? "text-amber-400" : "text-slate-200"
+                            )}
+                          >
+                            <Star className={cn("w-4 h-4", favorites.includes(s.id) && "fill-current")} />
+                          </button>
+                        </div>
+                      </motion.div>
+                    ))}
+                    {filteredStations.length === 0 && (
+                      <div className="text-center py-8 text-xs text-slate-400 font-bold">
+                        {lang === 'en' ? 'No saved stations yet' : 'እስካሁን ምንም የተቀመጡ ጣቢያዎች የሉም'}
                       </div>
-                      <div className="flex items-center gap-3 shrink-0">
-                        <div className="text-[11px] font-black text-primary">★ {s.rat}</div>
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); toggleFavorite(s.id); }}
-                          className={cn(
-                            "transition-transform active:scale-90",
-                            favorites.includes(s.id) ? "text-amber-400" : "text-slate-200"
-                          )}
-                        >
-                          <Star className={cn("w-4 h-4", favorites.includes(s.id) && "fill-current")} />
-                        </button>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
+                    )}
+                  </div>
+                )}
 
                 {/* All Routes */}
                 <div className="flex flex-col gap-2">
@@ -680,17 +686,16 @@ export default function App() {
                     <div 
                       key={`route-${idx}`}
                       onClick={() => handleStationClick(r.from)}
-                      className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-100 hover:border-primary/20 transition-all cursor-pointer"
+                      className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-100 hover:border-primary/20 hover:bg-slate-50/50 transition-all cursor-pointer group"
                     >
-                      <div className="w-9 h-9 bg-amber-50 rounded-lg flex items-center justify-center text-amber-500 border border-amber-100 shrink-0">
-                        <Bus className="w-4 h-4" />
+                      <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-500 border border-slate-100 shrink-0 group-hover:bg-amber-100/60 group-hover:text-amber-600 group-hover:border-amber-200/50 transition-all duration-300">
+                        <RouteIcon className="w-4.5 h-4.5" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="font-bold text-sm text-slate-800 truncate">{r.name}</div>
-                        <div className="text-[10px] text-slate-400 truncate">{r.from} → {r.to}</div>
+                        <div className="font-bold text-sm text-slate-800 group-hover:text-slate-900 transition-colors truncate">{r.from}</div>
                       </div>
-                      <div className="text-[9px] font-black bg-amber-50 text-amber-600 px-2 py-1 rounded-md border border-amber-100">
-                        {r.code}
+                      <div className="text-slate-300 group-hover:text-amber-500 group-hover:translate-x-1 transition-all duration-300 pr-1 shrink-0">
+                        <span className="text-base font-medium leading-none">→</span>
                       </div>
                     </div>
                   ))}
