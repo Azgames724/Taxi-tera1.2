@@ -47,45 +47,54 @@ function getFuzzyMatchScore(query: string, candidate: string): number {
   // If query is too short, don't allow broad distance matches
   if (qClean.length < 3) return -1;
 
-  // Levenshtein distance
-  const track = Array(qClean.length + 1).fill(null).map(() => Array(cClean.length + 1).fill(null));
-  for (let i = 0; i <= cClean.length; i += 1) {
-    track[0][i] = i;
+  // Levenshtein distance using highly-optimized typed arrays to avoid memory allocations in render loop
+  const lenQ = qClean.length;
+  const lenC = cClean.length;
+  let prevRow = new Int32Array(lenC + 1);
+  let currRow = new Int32Array(lenC + 1);
+
+  for (let i = 0; i <= lenC; i++) {
+    prevRow[i] = i;
   }
-  for (let j = 0; j <= qClean.length; j += 1) {
-    track[j][0] = j;
-  }
-  for (let j = 1; j <= qClean.length; j += 1) {
-    for (let i = 1; i <= cClean.length; i += 1) {
-      const indicator = cClean[i - 1] === qClean[j - 1] ? 0 : 1;
-      track[j][i] = Math.min(
-        track[j - 1][i] + 1, // deletion
-        track[j][i - 1] + 1, // insertion
-        track[j - 1][i - 1] + indicator // substitution
+
+  for (let j = 1; j <= lenQ; j++) {
+    currRow[0] = j;
+    const qChar = qClean[j - 1];
+    for (let i = 1; i <= lenC; i++) {
+      const indicator = cClean[i - 1] === qChar ? 0 : 1;
+      currRow[i] = Math.min(
+        prevRow[i] + 1, // deletion
+        currRow[i - 1] + 1, // insertion
+        prevRow[i - 1] + indicator // substitution
       );
     }
+    // Swap rows
+    const temp = prevRow;
+    prevRow = currRow;
+    currRow = temp;
   }
-  const distance = track[qClean.length][cClean.length];
+
+  const distance = prevRow[lenC];
   
-  const maxLength = Math.max(cClean.length, qClean.length);
+  const maxLength = Math.max(lenC, lenQ);
   const similarityScore = maxLength === 0 ? 100 : ((maxLength - distance) / maxLength) * 100;
 
   // Letter matching in sequence
   let qIdx = 0;
   let matchesInSequence = 0;
-  for (let cIdx = 0; cIdx < cClean.length && qIdx < qClean.length; cIdx++) {
+  for (let cIdx = 0; cIdx < lenC && qIdx < lenQ; cIdx++) {
     if (cClean[cIdx] === qClean[qIdx]) {
       matchesInSequence++;
       qIdx++;
     }
   }
   
-  const seqRatio = matchesInSequence / qClean.length;
+  const seqRatio = matchesInSequence / lenQ;
   const firstLetterBonus = qClean[0] === cClean[0] ? 1.2 : 0.8;
   const combinedFuzzy = (similarityScore * 0.4 + seqRatio * 60) * firstLetterBonus;
 
   // Score threshold for considering it a "similar" word
-  const threshold = qClean.length <= 3 ? 75 : qClean.length <= 5 ? 62 : 52;
+  const threshold = lenQ <= 3 ? 75 : lenQ <= 5 ? 62 : 52;
   
   if (combinedFuzzy >= threshold) {
     return 100 + combinedFuzzy;
@@ -100,14 +109,21 @@ interface TripPlannerProps {
   userLocation: [number, number] | null;
   initialOrigin?: string;
   initialDestination?: string;
+  onLocationChange?: (origin: string, destination: string) => void;
 }
 
-export default function TripPlanner({ lang, onPathSelect, userLocation, initialOrigin = '', initialDestination = '' }: TripPlannerProps) {
+export default function TripPlanner({ lang, onPathSelect, userLocation, initialOrigin = '', initialDestination = '', onLocationChange }: TripPlannerProps) {
   const [origin, setOrigin] = useState(initialOrigin);
   const [destination, setDestination] = useState(initialDestination);
   const [results, setResults] = useState<TripPath[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (onLocationChange) {
+      onLocationChange(origin, destination);
+    }
+  }, [origin, destination, onLocationChange]);
 
   // Sync selected path back to parent whenever selection or results change
   // This avoids "update during render" issues and handles background updates naturally
@@ -126,6 +142,21 @@ export default function TripPlanner({ lang, onPathSelect, userLocation, initialO
 
   const t = TRANSLATIONS[lang];
   const locations = useMemo(() => ['Current Location', ...Object.keys(COORDS)], []);
+
+  const amharicLabels = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const name of locations) {
+      if (name === 'Current Location') continue;
+      const matched = STATIONS.find(s => 
+        s.name.toLowerCase().includes(name.toLowerCase()) || 
+        s.addr.toLowerCase().includes(name.toLowerCase())
+      );
+      if (matched) {
+        map.set(name, matched.am.split(' ')[0]);
+      }
+    }
+    return map;
+  }, [locations]);
 
   const [walkingLeg, setWalkingLeg] = useState<{ distance: number; duration: number } | null>(null);
 
@@ -295,32 +326,32 @@ export default function TripPlanner({ lang, onPathSelect, userLocation, initialO
             </div>
             {showOriginAuto && filteredOrigin.length > 0 && (
               <div className="absolute top-full left-0 right-0 z-50 bg-white border border-slate-100 rounded-2xl mt-1.5 shadow-[0_12px_44px_rgba(15,23,42,0.08)] overflow-hidden">
-                {filteredOrigin.map(l => (
-                  <button 
-                    key={l}
-                    type="button"
-                    onClick={() => { setOrigin(l); setShowOriginAuto(false); }}
-                    className="w-full text-left px-4 py-3 hover:bg-slate-50 text-xs border-b border-slate-50 last:border-none transition-colors cursor-pointer"
-                  >
-                    {l === 'Current Location' ? (
-                      <span className="font-bold text-slate-700">
-                        {lang === 'am' ? '📍 አሁን ያሉበት ቦታ' : '📍 Current Location'}
-                      </span>
-                    ) : (
-                      <div className="flex justify-between items-center w-full">
-                        <span className="font-extrabold text-slate-800">{l}</span>
-                        {(() => {
-                          const matched = STATIONS.find(s => s.name.toLowerCase().includes(l.toLowerCase()) || s.addr.toLowerCase().includes(l.toLowerCase()));
-                          return matched ? (
+                {filteredOrigin.map(l => {
+                  const amLabel = amharicLabels.get(l);
+                  return (
+                    <button 
+                      key={l}
+                      type="button"
+                      onClick={() => { setOrigin(l); setShowOriginAuto(false); }}
+                      className="w-full text-left px-4 py-3 hover:bg-slate-50 text-xs border-b border-slate-50 last:border-none transition-colors cursor-pointer"
+                    >
+                      {l === 'Current Location' ? (
+                        <span className="font-bold text-slate-700">
+                          {lang === 'am' ? '📍 አሁን ያሉበት ቦታ' : '📍 Current Location'}
+                        </span>
+                      ) : (
+                        <div className="flex justify-between items-center w-full">
+                          <span className="font-extrabold text-slate-800">{l}</span>
+                          {amLabel ? (
                             <span className="text-[9px] text-slate-400 font-bold bg-slate-50 px-2 py-0.5 rounded-full border border-slate-100 shrink-0">
-                              {matched.am.split(' ')[0]}
+                              {amLabel}
                             </span>
-                          ) : null;
-                        })()}
-                      </div>
-                    )}
-                  </button>
-                ))}
+                          ) : null}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -354,26 +385,26 @@ export default function TripPlanner({ lang, onPathSelect, userLocation, initialO
             </div>
             {showDestAuto && filteredDest.length > 0 && (
               <div className="absolute top-full left-0 right-0 z-50 bg-white border border-slate-100 rounded-2xl mt-1.5 shadow-[0_12px_44px_rgba(15,23,42,0.08)] overflow-hidden">
-                {filteredDest.map(l => (
-                  <button 
-                    key={l}
-                    type="button"
-                    onClick={() => { setDestination(l); setShowDestAuto(false); }}
-                    className="w-full text-left px-4 py-3 hover:bg-slate-50 text-xs border-b border-slate-50 last:border-none transition-colors cursor-pointer"
-                  >
-                    <div className="flex justify-between items-center w-full">
-                      <span className="font-extrabold text-slate-800">{l}</span>
-                      {(() => {
-                        const matched = STATIONS.find(s => s.name.toLowerCase().includes(l.toLowerCase()) || s.addr.toLowerCase().includes(l.toLowerCase()));
-                        return matched ? (
+                {filteredDest.map(l => {
+                  const amLabel = amharicLabels.get(l);
+                  return (
+                    <button 
+                      key={l}
+                      type="button"
+                      onClick={() => { setDestination(l); setShowDestAuto(false); }}
+                      className="w-full text-left px-4 py-3 hover:bg-slate-50 text-xs border-b border-slate-50 last:border-none transition-colors cursor-pointer"
+                    >
+                      <div className="flex justify-between items-center w-full">
+                        <span className="font-extrabold text-slate-800">{l}</span>
+                        {amLabel ? (
                           <span className="text-[9px] text-slate-400 font-bold bg-slate-50 px-2 py-0.5 rounded-full border border-slate-100 shrink-0">
-                            {matched.am.split(' ')[0]}
+                            {amLabel}
                           </span>
-                        ) : null;
-                      })()}
-                    </div>
-                  </button>
-                ))}
+                        ) : null}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>

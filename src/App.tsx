@@ -50,8 +50,29 @@ function isInsideAddis(lat: number, lng: number): boolean {
   );
 }
 
+const BrandEmblem = () => (
+  <div className="relative flex items-center justify-center w-20 h-20 bg-gradient-to-tr from-cyan-500 via-emerald-500 to-amber-500 rounded-[28px] p-[3px] shadow-[0_16px_36px_-6px_rgba(8,145,178,0.35)] mb-6 select-none">
+    <div className="w-full h-full bg-slate-900 rounded-[25px] flex flex-col items-center justify-center relative overflow-hidden">
+      {/* Abstract geometric route indicators inside the emblem */}
+      <div className="absolute top-1/2 left-0 right-0 h-[1.5px] bg-cyan-500/15 -translate-y-1/2" />
+      <div className="absolute left-1/2 top-0 bottom-0 w-[1.5px] bg-amber-500/15 -translate-x-1/2" />
+      <div className="absolute inset-2 border border-slate-800/60 rounded-[18px] pointer-events-none" />
+      
+      {/* Ambient background pulsing aura */}
+      <div className="absolute w-10 h-10 bg-cyan-400/10 rounded-full blur-md" />
+      
+      <Bus className="w-8 h-8 text-cyan-400 drop-shadow-[0_2px_8px_rgba(34,211,238,0.4)] relative z-10" />
+    </div>
+    
+    {/* Overlapping direction badge */}
+    <div className="absolute -bottom-1 -right-1 bg-amber-500 text-white rounded-full p-1.5 border-[2.5px] border-white shadow-md flex items-center justify-center">
+      <Navigation className="w-3.5 h-3.5 fill-current text-white rotate-45" />
+    </div>
+  </div>
+);
+
 export const AVATARS = [
-  { id: '1', emoji: '🦊', bg: 'bg-gradient-to-tr from-amber-505 via-orange-400 to-rose-400', label: 'Sunset Fox' },
+  { id: '1', emoji: '🦊', bg: 'bg-gradient-to-tr from-amber-500 via-orange-400 to-rose-400', label: 'Sunset Fox' },
   { id: '2', emoji: '👾', bg: 'bg-gradient-to-tr from-indigo-500 via-purple-500 to-violet-600', label: 'Arcade Monster' },
   { id: '3', emoji: '🤖', bg: 'bg-gradient-to-tr from-cyan-400 via-sky-400 to-blue-500', label: 'Future Bot' },
   { id: '4', emoji: '🐱', bg: 'bg-gradient-to-tr from-pink-400 via-rose-400 to-red-500', label: 'Neko Pink' },
@@ -66,12 +87,27 @@ export default function App() {
   const [isSplash, setIsSplash] = useState(true);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'stations' | 'trips'>('stations');
+  const [activeTab, setActiveTab] = useState<'stations' | 'trips'>('trips');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStation, setSelectedStation] = useState<Station | null>(null);
   const [activePath, setActivePath] = useState<TripPath | null>(null);
   const [plannerInitialState, setPlannerInitialState] = useState<{ origin?: string, dest?: string }>({});
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+  const [plannerOrigin, setPlannerOrigin] = useState('');
+  const [plannerDestination, setPlannerDestination] = useState('');
+
+  const plannerStartCoords = useMemo<[number, number] | null>(() => {
+    if (!plannerOrigin) return null;
+    if (plannerOrigin === 'Current Location') {
+      return userLocation;
+    }
+    return COORDS[plannerOrigin] || null;
+  }, [plannerOrigin, userLocation]);
+
+  const plannerEndCoords = useMemo<[number, number] | null>(() => {
+    if (!plannerDestination) return null;
+    return COORDS[plannerDestination] || null;
+  }, [plannerDestination]);
   const [mapCenter, setMapCenter] = useState<[number, number]>([9.0222, 38.7469]);
   const [mapZoom, setMapZoom] = useState(14);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -79,7 +115,22 @@ export default function App() {
   const [favorites, setFavorites] = useState<number[]>(() => {
     return JSON.parse(localStorage.getItem('ttFavs') || '[]');
   });
-  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [isOffline, setIsOffline] = useState(() => {
+    const forced = localStorage.getItem('forceOffline');
+    if (forced !== null) {
+      return forced === 'true';
+    }
+    return !navigator.onLine;
+  });
+
+  const toggleOffline = useCallback(() => {
+    setIsOffline(prev => {
+      const next = !prev;
+      localStorage.setItem('forceOffline', next ? 'true' : 'false');
+      return next;
+    });
+  }, []);
+
   const [showFavsOnly, setShowFavsOnly] = useState(false);
 
   // User details states for onboarding and customization
@@ -97,8 +148,16 @@ export default function App() {
   const [isNameEditOpen, setIsNameEditOpen] = useState(false);
 
   useEffect(() => {
-    const handleOnline = () => setIsOffline(false);
-    const handleOffline = () => setIsOffline(true);
+    const handleOnline = () => {
+      if (localStorage.getItem('forceOffline') !== 'true') {
+        setIsOffline(false);
+      }
+    };
+    const handleOffline = () => {
+      if (localStorage.getItem('forceOffline') !== 'false') {
+        setIsOffline(true);
+      }
+    };
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     return () => {
@@ -247,51 +306,52 @@ export default function App() {
 
   if (isSplash) {
     return (
-      <div className="fixed inset-0 z-[9999] bg-slate-50 flex flex-col items-center justify-center p-6 font-sans select-none overflow-hidden">
+      <div className="fixed inset-0 z-[9999] bg-slate-50/95 flex flex-col items-center justify-center p-6 font-sans select-none overflow-hidden">
         {/* Dynamic decorative warm light background gradients */}
-        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-cyan-500/5 via-amber-400/5 to-transparent pointer-events-none" />
+        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-cyan-500/10 via-amber-400/5 to-transparent pointer-events-none" />
         
         <motion.div 
-          initial={{ opacity: 0, scale: 0.95, y: 15 }}
+          initial={{ opacity: 0, scale: 0.94, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-          className="w-full max-w-sm bg-white border border-slate-100/80 rounded-[40px] p-8 shadow-[0_24px_50px_rgba(15,23,42,0.06)] flex flex-col items-center text-center relative z-10"
+          exit={{ opacity: 0, scale: 0.95, y: -10 }}
+          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+          className="w-full max-w-sm bg-white/90 backdrop-blur-xl border border-slate-200/40 rounded-[36px] p-10 shadow-[0_32px_64px_-16px_rgba(15,23,42,0.08)] flex flex-col items-center text-center relative z-10"
         >
+          {/* Custom Beautiful Brand Emblem */}
           <motion.div 
             animate={{ 
-              y: [0, -4, 0],
+              y: [0, -6, 0],
             }}
-            transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-            className="w-16 h-16 bg-slate-50 p-1 rounded-[20px] border border-slate-100 shadow-[0_10px_30px_rgba(0,0,0,0.04)] flex items-center justify-center mb-4 shrink-0"
+            transition={{ repeat: Infinity, duration: 2.2, ease: "easeInOut" }}
+            className="flex items-center justify-center"
           >
-            <img 
-              src="https://raw.githubusercontent.com/Azgames724/Taxi-tera1.2/main/Picsart_26-05-11_16-29-35-238.png" 
-              alt="Taxi Tera Logo"
-              className="w-full h-full object-cover rounded-[16px]"
-              referrerPolicy="no-referrer"
-            />
+            <BrandEmblem />
           </motion.div>
-
-          <h2 className="text-xl font-black text-slate-800 tracking-tight leading-7">
+          
+          <h2 className="text-2xl font-black text-slate-900 tracking-tight leading-none mt-2">
             {lang === 'en' ? 'Taxi Tera' : 'ታክሲ ተራ'}
           </h2>
-          <p className="text-primary/95 text-[9px] font-black uppercase tracking-widest mt-1">
-            {lang === 'en' ? 'Addis Ababa Smart Transit' : 'አዲስ አበባ ስማርት ትራንዚት'}
+          <p className="text-cyan-600 text-[10px] font-black uppercase tracking-widest mt-2 bg-cyan-50 border border-cyan-100/50 px-3 py-1 rounded-full">
+            {lang === 'en' ? 'Smart Transit Assistant' : 'ስማርት ትራንዚት ረዳት'}
           </p>
           
-          <p className="text-xs text-slate-500 font-medium leading-relaxed max-w-[280px] mt-3 mb-5">
+          <p className="text-xs text-slate-500 font-medium leading-relaxed max-w-[260px] mt-4 mb-6">
             {lang === 'en' 
-              ? 'Find routes and taxi stations in Addis Ababa — offline.' 
-              : 'በአዲስ አበባ ውስጥ ያሉ መንገዶችን እና የታክሲ ጣቢያዎችን ከመስመር ውጭ ያግኙ።'}
+              ? 'Addis Ababa local network routes and taxi terminals — always available offline.' 
+              : 'የአዲስ አበባ የአካባቢ መስመሮች እና የታክሲ መቆሚያዎች — ሁልጊዜም ከመስመር ውጭ ዝግጁ።'}
           </p>
 
-          <div className="flex gap-1.5 justify-center mt-1">
+          <div className="flex gap-2 justify-center items-center h-4">
             {[0, 1, 2].map(i => (
               <motion.div 
                 key={i}
-                animate={{ opacity: [0.3, 1, 0.3], scale: [1, 1.25, 1] }}
-                transition={{ repeat: Infinity, duration: 1.2, delay: i * 0.15 }}
-                className="w-1.5 h-1.5 bg-slate-800 rounded-full"
+                animate={{ 
+                  opacity: [0.3, 1, 0.3], 
+                  scale: [0.9, 1.25, 0.9],
+                  backgroundColor: ["#94a3b8", "#0891b2", "#94a3b8"]
+                }}
+                transition={{ repeat: Infinity, duration: 1.4, delay: i * 0.18 }}
+                className="w-2 h-2 rounded-full"
               />
             ))}
           </div>
@@ -304,15 +364,17 @@ export default function App() {
     return (
       <div className="fixed inset-0 z-[9999] bg-slate-50 flex flex-col items-center justify-center p-6 font-sans select-none overflow-hidden">
         {/* Dynamic decorative warm light background gradients */}
-        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-cyan-500/5 via-amber-400/5 to-transparent pointer-events-none" />
+        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-cyan-500/10 via-amber-400/5 to-transparent pointer-events-none" />
         
         {/* Language selector toggle in top-right */}
-        <div className="absolute top-6 right-6 flex items-center gap-2">
+        <div className="absolute top-6 right-6 flex items-center gap-2 z-50">
           <button 
+            type="button"
             onClick={() => setLang(l => l === 'en' ? 'am' : 'en')}
-            className="px-3.5 py-1.5 bg-white shadow-[0_4px_16px_rgba(0,0,0,0.04)] rounded-full border border-slate-100 font-black text-[10px] text-slate-700 active:scale-95 transition-all outline-none cursor-pointer"
+            className="px-4 py-2 bg-white/90 backdrop-blur-md shadow-[0_4px_20px_rgba(15,23,42,0.05)] rounded-full border border-slate-200/50 font-black text-[10px] text-slate-800 hover:bg-slate-50 active:scale-95 transition-all outline-none cursor-pointer flex items-center gap-1.5"
           >
-            {lang === 'en' ? 'አማርኛ (AM)' : 'English (EN)'}
+            <span>🌐</span>
+            <span>{lang === 'en' ? 'አማርኛ' : 'English'}</span>
           </button>
         </div>
 
@@ -320,28 +382,21 @@ export default function App() {
           initial={{ opacity: 0, scale: 0.95, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-          className="w-full max-w-sm bg-white border border-slate-100/80 rounded-[40px] p-8 shadow-[0_24px_50px_rgba(15,23,42,0.06)] flex flex-col items-center text-center relative z-10"
+          className="w-full max-w-sm bg-white/95 backdrop-blur-xl border border-slate-200/50 rounded-[36px] p-8 sm:p-10 shadow-[0_32px_64px_-16px_rgba(15,23,42,0.1)] flex flex-col items-center relative z-10"
         >
-          <div className="w-16 h-16 bg-slate-50 p-1 rounded-[20px] border border-slate-100 shadow-[0_10px_30px_rgba(0,0,0,0.04)] flex items-center justify-center mb-4 shrink-0">
-            <img 
-              src="https://raw.githubusercontent.com/Azgames724/Taxi-tera1.2/main/Picsart_26-05-11_16-29-35-238.png" 
-              alt="Taxi Tera Logo"
-              className="w-full h-full object-cover rounded-[16px]"
-              referrerPolicy="no-referrer"
-            />
-          </div>
+          <BrandEmblem />
 
-          <h2 className="text-xl font-black text-slate-800 tracking-tight leading-7">
+          <h2 className="text-xl font-black text-slate-900 tracking-tight leading-none text-center">
             {lang === 'en' ? 'Welcome to Taxi Tera' : 'እንኳን ወደ ታክሲ ተራ በደህና መጡ'}
           </h2>
-          <p className="text-primary/95 text-[9px] font-black uppercase tracking-widest mt-1">
-            {lang === 'en' ? 'Addis Ababa Smart Transit' : 'አዲስ አበባ ስማርት ትራንዚት'}
+          <p className="text-cyan-600 text-[10px] font-black uppercase tracking-widest mt-2.5 bg-cyan-50 border border-cyan-100/50 px-3 py-1 rounded-full text-center">
+            {lang === 'en' ? 'Addis Smart Transit' : 'አዲስ ስማርት ትራንዚት'}
           </p>
           
-          <p className="text-xs text-slate-500 font-medium leading-relaxed max-w-[280px] mt-2 mb-4">
+          <p className="text-[11px] text-slate-500 font-medium leading-relaxed max-w-[280px] mt-3.5 mb-5 text-center">
             {lang === 'en' 
-              ? 'Personalize your offline transit and taxi tera guide. Select your custom avatar and name below.' 
-              : 'የእርስዎን ከመስመር ውጭ ጉዞ ያብጁ። የሚወዱትን ምስል እና ስም ይምረጡ።'}
+              ? 'Personalize your offline transit experience. Choose a custom avatar and enter your name.' 
+              : 'የእርስዎን የእለት ተእለት ጉዞ ረዳት ያብጁ። ለመጀመር ያህል አምሳያ መርጠው ስምዎን ያስገቡ።'}
           </p>
 
           <form 
@@ -356,14 +411,20 @@ export default function App() {
                 setIsOnboarding(false);
               }
             }}
-            className="w-full flex flex-col gap-3.5"
+            className="w-full flex flex-col gap-4"
           >
-            {/* Onboarding Discord-style Avatar profile choices */}
+            {/* High-end Avatar selector */}
             <div className="flex flex-col items-center w-full">
-              <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 mb-2">
-                {lang === 'en' ? 'Select Avatar Profile' : 'የመገለጫ ምስል ይምረጡ'}
-              </span>
-              <div className="flex gap-2 w-full justify-center overflow-x-auto pb-1 scrollbar-hide">
+              <div className="flex items-center justify-between w-full px-1 mb-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  {lang === 'en' ? 'Choose Avatar' : 'አምሳያ ይምረጡ'}
+                </span>
+                <span className="text-[9px] font-mono text-cyan-600 bg-cyan-50 px-2 py-0.5 rounded-full border border-cyan-100">
+                  {AVATARS.find(a => a.id === tempAvatarId)?.label || ''}
+                </span>
+              </div>
+              
+              <div className="grid grid-cols-6 gap-2 w-full bg-slate-50/70 p-2.5 rounded-2xl border border-slate-100">
                 {AVATARS.map((avatar) => {
                   const isSelected = tempAvatarId === avatar.id;
                   return (
@@ -372,34 +433,52 @@ export default function App() {
                       type="button"
                       onClick={() => setTempAvatarId(avatar.id)}
                       className={cn(
-                        "w-9 h-9 rounded-full flex items-center justify-center text-base transition-all active:scale-95 cursor-pointer border-2 shadow-sm shrink-0",
+                        "relative w-9 h-9 rounded-xl flex items-center justify-center text-lg transition-all duration-300 transform active:scale-95 cursor-pointer border shadow-sm",
                         avatar.bg,
-                        isSelected ? "border-slate-800 scale-110 ring-4 ring-slate-800/10" : "border-white"
+                        isSelected 
+                          ? "border-slate-950 scale-110 ring-[3px] ring-slate-950/15 z-10" 
+                          : "border-slate-200/40 opacity-70 hover:opacity-100 hover:scale-105"
                       )}
+                      title={avatar.label}
                     >
-                      {avatar.emoji}
+                      <span>{avatar.emoji}</span>
+                      {/* Selected dot indicator */}
+                      {isSelected && (
+                        <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-slate-950 text-white rounded-full border border-white flex items-center justify-center text-[7px] font-black">
+                          ✓
+                        </div>
+                      )}
                     </button>
                   );
                 })}
               </div>
             </div>
 
-            <div className="w-full relative mt-1">
-              <input 
-                type="text"
-                value={tempNameInput}
-                onChange={(e) => setTempNameInput(e.target.value)}
-                placeholder={lang === 'en' ? 'What should we call you?' : 'ስምዎት ማን ይባላል?'}
-                className="w-full bg-slate-50 text-slate-800 border border-slate-200/50 rounded-2xl px-5 py-3.5 text-xs font-bold text-center outline-none focus:border-slate-950 focus:bg-white transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.01)] leading-none"
-                maxLength={20}
-                required
-              />
+            {/* Gorgeous Name Input card field */}
+            <div className="w-full relative">
+              <label className="block text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 px-1">
+                {lang === 'en' ? 'Your Name' : 'የእርስዎ ስም'}
+              </label>
+              <div className="relative">
+                <input 
+                  type="text"
+                  value={tempNameInput}
+                  onChange={(e) => setTempNameInput(e.target.value)}
+                  placeholder={lang === 'en' ? 'e.g., Alazar' : 'ምሳሌ፡ አልዓዛር'}
+                  className="w-full bg-slate-50/90 text-slate-800 focus:text-slate-900 border border-slate-200/60 rounded-2xl pl-11 pr-5 py-4 text-xs font-bold outline-none focus:border-slate-950 focus:bg-white transition-all duration-300 shadow-[inset_0_2px_4px_rgba(15,23,42,0.01)] placeholder:text-slate-400"
+                  maxLength={18}
+                  required
+                />
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 transition-colors pointer-events-none">
+                  <span className="text-sm">👋</span>
+                </div>
+              </div>
             </div>
 
             <button 
               type="submit"
               disabled={!tempNameInput.trim()}
-              className="w-full py-3.5 bg-slate-900 border border-slate-900 hover:bg-slate-800 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest active:scale-[0.98] transition-all shadow-[0_8px_30px_rgba(15,23,42,0.15)] disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full py-4 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest active:scale-[0.98] transition-all duration-200 shadow-md disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center gap-2 cursor-pointer mt-1"
             >
               <span>{lang === 'en' ? "Get Started" : "እንጀምር"}</span>
             </button>
@@ -470,18 +549,6 @@ export default function App() {
           {/* High-fidelity Stat Pills */}
           <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide pointer-events-auto">
             <button 
-              onClick={() => { setShowFavsOnly(false); setActiveTab('stations'); setPanelHeight('expanded'); setPanelOpen(true); }}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-wider shadow-sm shrink-0 transition-all border",
-                (!showFavsOnly && activeTab === 'stations')
-                  ? "bg-slate-900 text-white border-slate-900" 
-                  : "bg-white/90 backdrop-blur-sm text-slate-700 border-slate-100 hover:bg-slate-50"
-              )}
-            >
-              <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
-              Active Teras ({STATIONS.length})
-            </button>
-            <button 
               onClick={() => { setShowFavsOnly(true); setActiveTab('stations'); setPanelHeight('expanded'); setPanelOpen(true); }}
               className={cn(
                 "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-wider shadow-sm shrink-0 transition-all border",
@@ -492,12 +559,21 @@ export default function App() {
             >
               ★ Favorites ({favorites.length})
             </button>
-            {isOffline && (
-              <span className="flex items-center gap-1.5 bg-rose-50 text-rose-600 border border-rose-100/85 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-wider shadow-sm shrink-0 animate-pulse">
-                <span className="w-1.5 h-1.5 bg-rose-500 rounded-full" />
-                Offline Mode
-              </span>
-            )}
+            <button 
+              onClick={toggleOffline}
+              title={lang === 'en' ? "Toggle Offline Mode (Low Internet)" : "የመገናኛ ሁነታን ቀይር (ደካማ ኢንተርኔት)"}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-wider shadow-sm shrink-0 transition-all border cursor-pointer",
+                isOffline 
+                  ? "bg-rose-50 text-rose-600 border-rose-100/85 hover:bg-rose-100/60 animate-pulse" 
+                  : "bg-white/90 backdrop-blur-sm text-slate-700 border-slate-100 hover:bg-slate-50"
+              )}
+            >
+              <span className={cn("w-1.5 h-1.5 rounded-full", isOffline ? "bg-rose-500" : "bg-emerald-400 animate-pulse")} />
+              {isOffline 
+                ? (lang === 'en' ? 'Offline Mode' : 'ኦፍላይን ሁነታ') 
+                : (lang === 'en' ? 'Online Mode' : 'ኦንላይን ሁነታ')}
+            </button>
           </div>
         </div>
       </div>
@@ -514,6 +590,8 @@ export default function App() {
           onStationClick={handleStationClick}
           panelOpen={panelOpen}
           isOffline={isOffline}
+          plannerStart={plannerStartCoords}
+          plannerEnd={plannerEndCoords}
         />
 
         {/* Premium Gradient Fades - transitioning cleanly from background color to map */}
@@ -715,6 +793,10 @@ export default function App() {
                   initialOrigin={plannerInitialState.origin}
                   initialDestination={plannerInitialState.dest}
                   onPathSelect={handlePathSelect} 
+                  onLocationChange={(orig, dest) => {
+                    setPlannerOrigin(orig);
+                    setPlannerDestination(dest);
+                  }}
                 />
               </motion.div>
             )}
@@ -1149,29 +1231,21 @@ export default function App() {
       {/* iOS Premium Bottom Tab Bar */}
       <div className="fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-slate-100/70 p-2 pb-5 sm:p-2.5 sm:pb-3.5 flex justify-around items-center z-[1100] shadow-[0_-4px_24px_rgba(0,0,0,0.03)] select-none">
         {[
-          { id: 'stations', label: lang === 'en' ? 'Stations' : 'ጣቢያዎች', icon: Bus },
           { id: 'trips', label: lang === 'en' ? 'Planner' : 'አቅጣጫ', icon: Navigation },
           { id: 'favs', label: lang === 'en' ? 'Favorites' : 'ተወዳጆች', icon: Star },
           { id: 'about', label: lang === 'en' ? 'About Tejo' : 'ስለ መተግበሪያው', icon: Info }
         ].map((item) => {
-          const isActive = (item.id === 'stations')
-            ? (activeTab === 'stations' && !showFavsOnly && panelOpen)
-            : (item.id === 'trips')
-              ? (activeTab === 'trips' && panelOpen)
-              : (item.id === 'favs')
-                ? (activeTab === 'stations' && showFavsOnly && panelOpen)
-                : false;
+          const isActive = (item.id === 'trips')
+            ? (activeTab === 'trips' && panelOpen)
+            : (item.id === 'favs')
+              ? (activeTab === 'stations' && showFavsOnly && panelOpen)
+              : false;
 
           return (
             <button
               key={item.id}
               onClick={() => {
-                if (item.id === 'stations') {
-                  setShowFavsOnly(false);
-                  setActiveTab('stations');
-                  setPanelHeight('expanded');
-                  setPanelOpen(true);
-                } else if (item.id === 'trips') {
+                if (item.id === 'trips') {
                   setActiveTab('trips');
                   setPanelHeight('expanded');
                   setPanelOpen(true);

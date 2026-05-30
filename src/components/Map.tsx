@@ -32,9 +32,11 @@ interface MapProps {
   lang: 'en' | 'am';
   panelOpen: boolean;
   isOffline?: boolean;
+  plannerStart?: [number, number] | null;
+  plannerEnd?: [number, number] | null;
 }
 
-function MapUpdater({ center, zoom, activePath, panelOpen }: { center: [number, number], zoom: number, activePath: any, panelOpen: boolean }) {
+function MapUpdater({ center, zoom, activePath, panelOpen, plannerStart, plannerEnd }: { center: [number, number], zoom: number, activePath: any, panelOpen: boolean, plannerStart?: [number, number] | null; plannerEnd?: [number, number] | null }) {
   const map = useMap();
   const lastCenter = useRef<[number, number]>(center);
   const lastZoom = useRef<number>(zoom);
@@ -96,8 +98,20 @@ function MapUpdater({ center, zoom, activePath, panelOpen }: { center: [number, 
         const bounds = L.latLngBounds(coords);
         map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16, animate: true });
       }
+    } else {
+      const coords: [number, number][] = [];
+      if (plannerStart) coords.push(plannerStart);
+      if (plannerEnd) coords.push(plannerEnd);
+      if (coords.length > 0) {
+        if (coords.length === 1) {
+          map.setView(coords[0], 15, { animate: true });
+        } else {
+          const bounds = L.latLngBounds(coords);
+          map.fitBounds(bounds, { padding: [80, 80], maxZoom: 15, animate: true });
+        }
+      }
     }
-  }, [activePath, map]);
+  }, [activePath, plannerStart, plannerEnd, map]);
 
   return null;
 }
@@ -157,6 +171,34 @@ const routeIcon = (isStart?: boolean) => L.divIcon({
   iconAnchor: [24, 24]
 });
 
+const plannerStartIcon = (label: string) => L.divIcon({
+  html: `
+    <div style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 120px; height: 60px;">
+      <div style="background: #0891B2; color: white; font-family: system-ui, -apple-system, sans-serif; font-size: 9px; font-weight: 900; padding: 4px 10px; border-radius: 9999px; box-shadow: 0 4px 12px rgba(8,145,178,0.3); border: 2.5px solid white; white-space: nowrap; margin-bottom: 2px;">
+         🏁 ${label}
+      </div>
+      <div style="background: #0891B2; width: 14px; height: 14px; border-radius: 50%; border: 2.5px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.35);"></div>
+    </div>
+  `,
+  className: '',
+  iconSize: [120, 60],
+  iconAnchor: [60, 52]
+});
+
+const plannerEndIcon = (label: string) => L.divIcon({
+  html: `
+    <div style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 120px; height: 60px;">
+      <div style="background: #F59E0B; color: white; font-family: system-ui, -apple-system, sans-serif; font-size: 9px; font-weight: 900; padding: 4px 10px; border-radius: 9999px; box-shadow: 0 4px 12px rgba(245,158,11,0.3); border: 2.5px solid white; white-space: nowrap; margin-bottom: 2px;">
+         📍 ${label}
+      </div>
+      <div style="background: #F59E0B; width: 14px; height: 14px; border-radius: 50%; border: 2.5px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.355);"></div>
+    </div>
+  `,
+  className: '',
+  iconSize: [120, 60],
+  iconAnchor: [60, 52]
+});
+
 const mapStyles = `
   @keyframes bounce {
     from { transform: translateY(0); }
@@ -200,9 +242,18 @@ const mapStyles = `
   }
 `;
 
-const Map = memo(({ center, zoom, userLocation, activePath, onStationClick, lang, panelOpen, isOffline = false }: MapProps) => {
+const Map = memo(({ center, zoom, userLocation, activePath, onStationClick, lang, panelOpen, isOffline = false, plannerStart, plannerEnd }: MapProps) => {
   const locations = useMemo(() => Object.entries(COORDS), []);
   const stationData = useMemo(() => STATIONS, []);
+  
+  const stationLookup = useMemo(() => {
+    const map = new globalThis.Map<string, Station>();
+    for (const s of STATIONS) {
+      map.set(s.name, s);
+    }
+    return map;
+  }, []);
+
   const [currentZoom, setCurrentZoom] = useState(zoom);
 
   const [localOffline, setLocalOffline] = useState(!navigator.onLine);
@@ -260,7 +311,7 @@ const Map = memo(({ center, zoom, userLocation, activePath, onStationClick, lang
             opacity={1.0}
           />
         )}
-        <MapUpdater center={center} zoom={zoom} activePath={activePath} panelOpen={panelOpen} />
+        <MapUpdater center={center} zoom={zoom} activePath={activePath} panelOpen={panelOpen} plannerStart={plannerStart} plannerEnd={plannerEnd} />
         <ZoomTracker onZoomChange={setCurrentZoom} />
 
         {offline && (
@@ -292,6 +343,22 @@ const Map = memo(({ center, zoom, userLocation, activePath, onStationClick, lang
           <Marker position={userLocation} icon={userIcon} zIndexOffset={3000} />
         )}
 
+        {plannerStart && (
+          <Marker 
+            position={plannerStart} 
+            icon={plannerStartIcon(lang === 'en' ? 'Origin' : 'መነሻ')} 
+            zIndexOffset={5000}
+          />
+        )}
+
+        {plannerEnd && (
+          <Marker 
+            position={plannerEnd} 
+            icon={plannerEndIcon(lang === 'en' ? 'Destination' : 'መድረሻ')} 
+            zIndexOffset={5000}
+          />
+        )}
+
         <MarkerClusterGroup
           maxClusterRadius={60}
           disableClusteringAtZoom={15}
@@ -299,7 +366,7 @@ const Map = memo(({ center, zoom, userLocation, activePath, onStationClick, lang
           spiderfyOnMaxZoom={true}
         >
           {locations.map(([name, pos], index) => {
-            const station = stationData.find(s => s.name === name);
+            const station = stationLookup.get(name);
             return (
               <Marker 
                 key={`loc-${name}-${showStationIcons ? 'icon' : 'num'}`}
