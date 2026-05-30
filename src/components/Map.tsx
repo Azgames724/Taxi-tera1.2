@@ -31,6 +31,7 @@ interface MapProps {
   onStationClick: (s: Station | string) => void;
   lang: 'en' | 'am';
   panelOpen: boolean;
+  isOffline?: boolean;
 }
 
 function MapUpdater({ center, zoom, activePath, panelOpen }: { center: [number, number], zoom: number, activePath: any, panelOpen: boolean }) {
@@ -109,34 +110,51 @@ function ZoomTracker({ onZoomChange }: { onZoomChange: (z: number) => void }) {
 }
 
 const userIcon = L.divIcon({
-  html: '<div class="user-dot"></div>',
+  html: `
+    <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 48px; height: 48px;">
+      <!-- Glowing core pulse representing localized position -->
+      <div style="position: absolute; width: 32px; height: 32px; border-radius: 50%; background: rgba(8, 145, 178, 0.15); animation: pulse 2s infinite ease-in-out;"></div>
+      <div style="position: absolute; width: 16px; height: 16px; border-radius: 50%; background: #0891B2; border: 2.5px solid white; box-shadow: 0 2px 10px rgba(0,0,0,0.25);"></div>
+    </div>
+  `,
   className: '',
-  iconSize: [24, 24],
-  iconAnchor: [12, 12]
+  iconSize: [48, 48],
+  iconAnchor: [24, 24]
 });
 
 const minibusIcon = (showIcon?: boolean, count?: number) => L.divIcon({
   html: `
-    <div style="background: white; width: 34px; height: 34px; border-radius: 50% 50% 50% 5px; transform: rotate(-45deg); border: 2.5px solid #0891B2; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
-      <div style="transform: rotate(45deg); display: flex; align-items: center; justify-content: center; font-size: ${showIcon ? '14px' : '11px'}; font-weight: 900; color: #0891B2; font-family: system-ui;">
-        ${showIcon ? '🚌' : (count || 3)}
+    <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 64px; height: 64px;">
+      <!-- iOS style custom translucent coverage range halo matching screenshot exactly -->
+      <div style="position: absolute; width: 52px; height: 52px; border-radius: 50%; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.25);"></div>
+      <div style="position: absolute; width: 28px; height: 28px; border-radius: 50%; background: rgba(56, 189, 248, 0.1); filter: blur(3px);"></div>
+      
+      <!-- Sleek high-contrast black marker node -->
+      <div style="position: absolute; width: 28px; height: 28px; border-radius: 50%; background: #0f172a; border: 2px solid white; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(0,0,0,0.2); transition: transform 0.2s ease;">
+        <span style="font-size: ${showIcon ? '11px' : '9px'}; font-weight: 900; color: white; font-family: system-ui, -apple-system, sans-serif;">
+          ${showIcon ? '🚌' : (count || 3)}
+        </span>
       </div>
     </div>
   `,
   className: '',
-  iconSize: [34, 34],
-  iconAnchor: [17, 34]
+  iconSize: [64, 64],
+  iconAnchor: [32, 32]
 });
 
 const routeIcon = (isStart?: boolean) => L.divIcon({
   html: `
-    <div style="background: ${isStart ? '#0891B2' : '#F59E0B'}; width: 32px; height: 32px; border-radius: 50%; border: 3px solid white; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.3); animation: bounce 1s infinite alternate;">
-      <span style="font-size: 16px;">${isStart ? '🚌' : '🚕'}</span>
+    <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 48px; height: 48px;">
+      <!-- High contrast travel nodes with subtle micro bounce -->
+      <div style="position: absolute; width: 34px; height: 34px; border-radius: 50%; background: rgba(245, 158, 11, 0.15); filter: blur(2px);"></div>
+      <div style="background: ${isStart ? '#0891B2' : '#F59E0B'}; width: 26px; height: 26px; border-radius: 50%; border: 2.5px solid white; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(0,0,0,0.25); animation: bounce 1.2s infinite alternate;">
+        <span style="font-size: 11px;">${isStart ? '🏁' : '📍'}</span>
+      </div>
     </div>
   `,
   className: '',
-  iconSize: [32, 32],
-  iconAnchor: [16, 16]
+  iconSize: [48, 48],
+  iconAnchor: [24, 24]
 });
 
 const mapStyles = `
@@ -144,21 +162,63 @@ const mapStyles = `
     from { transform: translateY(0); }
     to { transform: translateY(-4px); }
   }
+  @keyframes pulse {
+    0% { transform: scale(0.8); opacity: 0.5; }
+    50% { transform: scale(1.2); opacity: 1; }
+    100% { transform: scale(0.8); opacity: 0.5; }
+  }
   .marker-cluster-small, .marker-cluster-medium, .marker-cluster-large {
-    background-color: rgba(8, 145, 178, 0.4) !important;
+    background-color: rgba(15, 23, 42, 0.15) !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
   }
   .marker-cluster-small div, .marker-cluster-medium div, .marker-cluster-large div {
-    background-color: rgba(8, 145, 178, 0.8) !important;
+    background-color: #0f172a !important;
     color: white !important;
     font-weight: 900 !important;
-    font-size: 14px !important;
+    font-size: 11px !important;
+    width: 28px !important;
+    height: 28px !important;
+    border-radius: 50% !important;
+    border: 2px solid white !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 4px !important;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15) !important;
+  }
+  .blueprint {
+    background-color: #0b1329 !important;
+    background-image: 
+      radial-gradient(rgba(8, 145, 178, 0.25) 1.5px, transparent 1.5px),
+      linear-gradient(rgba(8, 145, 178, 0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(8, 145, 178, 0.08) 1px, transparent 1px) !important;
+    background-size: 24px 24px, 48px 48px, 48px 48px !important;
+    background-position: center !important;
   }
 `;
 
-const Map = memo(({ center, zoom, userLocation, activePath, onStationClick, lang, panelOpen }: MapProps) => {
+const Map = memo(({ center, zoom, userLocation, activePath, onStationClick, lang, panelOpen, isOffline = false }: MapProps) => {
   const locations = useMemo(() => Object.entries(COORDS), []);
   const stationData = useMemo(() => STATIONS, []);
   const [currentZoom, setCurrentZoom] = useState(zoom);
+
+  const [localOffline, setLocalOffline] = useState(!navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setLocalOffline(false);
+    const handleOffline = () => setLocalOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  const offline = isOffline || localOffline;
 
   const handleMarkerClick = useMemo(() => (name: string, pos: [number, number]) => {
     onStationClick(name);
@@ -169,23 +229,64 @@ const Map = memo(({ center, zoom, userLocation, activePath, onStationClick, lang
   return (
     <div className="w-full h-full relative z-0">
       <style>{mapStyles}</style>
+
+      {offline && (
+        <div className="absolute top-24 right-3 z-[1000] pointer-events-none">
+          <div className="bg-slate-950/90 backdrop-blur-md text-cyan-400 border border-cyan-500/30 px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-2xl animate-pulse">
+            <span className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-ping" />
+            <span className="text-[10px] font-black tracking-wider uppercase">Addis Ababa Offline Map</span>
+          </div>
+        </div>
+      )}
+
       <MapContainer 
         center={center} 
         zoom={zoom} 
         scrollWheelZoom={true} 
         zoomControl={false}
         preferCanvas={true}
-        className="w-full h-full"
+        className={`w-full h-full ${offline ? 'blueprint' : ''}`}
+        maxBounds={[[8.82, 38.60], [9.12, 38.90]]}
+        maxBoundsViscosity={1.0}
+        minZoom={12}
+        maxZoom={18}
       >
-        <TileLayer
-          attribution='&copy; Voyager'
-          url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-          updateWhenIdle={true}
-          keepBuffer={2}
-          opacity={1.0}
-        />
+        {!offline && (
+          <TileLayer
+            attribution='&copy; Voyager'
+            url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+            updateWhenIdle={true}
+            keepBuffer={3}
+            opacity={1.0}
+          />
+        )}
         <MapUpdater center={center} zoom={zoom} activePath={activePath} panelOpen={panelOpen} />
         <ZoomTracker onZoomChange={setCurrentZoom} />
+
+        {offline && (
+          <Fragment key="offline-route-mesh">
+            {ROUTES.map((r, idx) => {
+              const fromCoord = COORDS[r.from];
+              const toCoord = COORDS[r.to];
+              if (!fromCoord || !toCoord) return null;
+              
+              const isEven = idx % 2 === 0;
+              return (
+                <Polyline
+                  key={`offline-mesh-${r.id}-${idx}`}
+                  positions={[fromCoord, toCoord]}
+                  pathOptions={{
+                    color: isEven ? '#06b6d4' : '#f59e0b',
+                    weight: 1.2,
+                    opacity: 0.12,
+                    dashArray: '3, 6',
+                    interactive: false
+                  }}
+                />
+              );
+            })}
+          </Fragment>
+        )}
         
         {userLocation && (
           <Marker position={userLocation} icon={userIcon} zIndexOffset={3000} />

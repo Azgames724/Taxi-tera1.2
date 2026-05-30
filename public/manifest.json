@@ -1,0 +1,17 @@
+{
+  "short_name": "Taxi Tera",
+  "name": "Taxi Tera - Addis Ababa",
+  "icons": [
+    {
+      "src": "https://github.com/Azgames724/Taxi-tera1.2/raw/main/Picsart_26-05-11_16-29-35-238.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0f172a",
+  "theme_color": "#0891b2",
+  "display": "standalone",
+  "orientation": "portrait"
+}

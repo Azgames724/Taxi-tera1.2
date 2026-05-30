@@ -34,6 +34,31 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+const ADDIS_BOUNDS = {
+  minLat: 8.82,
+  maxLat: 9.12,
+  minLng: 38.60,
+  maxLng: 38.90
+};
+
+function isInsideAddis(lat: number, lng: number): boolean {
+  return (
+    lat >= ADDIS_BOUNDS.minLat &&
+    lat <= ADDIS_BOUNDS.maxLat &&
+    lng >= ADDIS_BOUNDS.minLng &&
+    lng <= ADDIS_BOUNDS.maxLng
+  );
+}
+
+export const AVATARS = [
+  { id: '1', emoji: '🦊', bg: 'bg-gradient-to-tr from-amber-505 via-orange-400 to-rose-400', label: 'Sunset Fox' },
+  { id: '2', emoji: '👾', bg: 'bg-gradient-to-tr from-indigo-500 via-purple-500 to-violet-600', label: 'Arcade Monster' },
+  { id: '3', emoji: '🤖', bg: 'bg-gradient-to-tr from-cyan-400 via-sky-400 to-blue-500', label: 'Future Bot' },
+  { id: '4', emoji: '🐱', bg: 'bg-gradient-to-tr from-pink-400 via-rose-400 to-red-500', label: 'Neko Pink' },
+  { id: '5', emoji: '⚡', bg: 'bg-gradient-to-tr from-emerald-400 via-teal-400 to-cyan-500', label: 'Neon Spark' },
+  { id: '6', emoji: '🐼', bg: 'bg-gradient-to-tr from-slate-500 via-zinc-600 to-neutral-700', label: 'Panda Noir' }
+];
+
 export default function App() {
   const [lang, setLang] = useState<'en' | 'am'>(() => {
     return (localStorage.getItem('ttLang') as 'en' | 'am') || 'en';
@@ -54,6 +79,33 @@ export default function App() {
   const [favorites, setFavorites] = useState<number[]>(() => {
     return JSON.parse(localStorage.getItem('ttFavs') || '[]');
   });
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [showFavsOnly, setShowFavsOnly] = useState(false);
+
+  // User details states for onboarding and customization
+  const [userName, setUserName] = useState<string>(() => {
+    return localStorage.getItem('ttUserName') || '';
+  });
+  const [userAvatarId, setUserAvatarId] = useState<string>(() => {
+    return localStorage.getItem('ttUserAvatarId') || '1';
+  });
+  const [isOnboarding, setIsOnboarding] = useState<boolean>(() => {
+    return !localStorage.getItem('ttUserName');
+  });
+  const [tempNameInput, setTempNameInput] = useState('');
+  const [tempAvatarId, setTempAvatarId] = useState<string>('1');
+  const [isNameEditOpen, setIsNameEditOpen] = useState(false);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
   
   // Update state when panelOpen prop changes from external sources
   useEffect(() => {
@@ -84,9 +136,15 @@ export default function App() {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          const loc: [number, number] = [pos.coords.latitude, pos.coords.longitude];
-          setUserLocation(loc);
-          setMapCenter(loc);
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          if (isInsideAddis(lat, lng)) {
+            const loc: [number, number] = [lat, lng];
+            setUserLocation(loc);
+            setMapCenter(loc);
+          } else {
+            console.warn('Geolocation outside Addis Ababa. Keeping map content locked in Addis Ababa.');
+          }
         },
         () => console.warn('Location access denied')
       );
@@ -95,12 +153,15 @@ export default function App() {
 
   const filteredStations = useMemo(() => {
     const query = searchQuery.toLowerCase();
-    return STATIONS.filter(s => 
+    const list = showFavsOnly 
+      ? STATIONS.filter(s => favorites.includes(s.id)) 
+      : STATIONS;
+    return list.filter(s => 
       s.name.toLowerCase().includes(query) || 
       s.am.includes(query) ||
       s.t.includes(query)
     );
-  }, [searchQuery]);
+  }, [searchQuery, showFavsOnly, favorites]);
 
   const filteredRoutes = useMemo(() => {
     const query = searchQuery.toLowerCase();
@@ -146,15 +207,23 @@ export default function App() {
   }, [mapCenter]);
 
   const handleLocateMe = useCallback(() => {
-    if (userLocation) {
+    if (userLocation && isInsideAddis(userLocation[0], userLocation[1])) {
       setMapCenter(userLocation);
       setMapZoom(15);
     } else if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition((pos) => {
-        const loc: [number, number] = [pos.coords.latitude, pos.coords.longitude];
-        setUserLocation(loc);
-        setMapCenter(loc);
-        setMapZoom(15);
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        if (isInsideAddis(lat, lng)) {
+          const loc: [number, number] = [lat, lng];
+          setUserLocation(loc);
+          setMapCenter(loc);
+          setMapZoom(15);
+        } else {
+          // Reset view to central Addis Ababa
+          setMapCenter([9.0220, 38.7523]);
+          setMapZoom(14);
+        }
       });
     }
   }, [userLocation]);
@@ -178,62 +247,163 @@ export default function App() {
 
   if (isSplash) {
     return (
-      <div className="fixed inset-0 z-[9999] bg-slate-900 flex flex-col items-center justify-center overflow-hidden">
+      <div className="fixed inset-0 z-[9999] bg-slate-50 flex flex-col items-center justify-center p-6 font-sans select-none overflow-hidden">
+        {/* Dynamic decorative warm light background gradients */}
+        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-cyan-500/5 via-amber-400/5 to-transparent pointer-events-none" />
+        
         <motion.div 
-          initial={{ opacity: 0, scale: 0.8, y: 20 }}
+          initial={{ opacity: 0, scale: 0.95, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-          className="flex flex-col items-center gap-8"
+          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+          className="w-full max-w-sm bg-white border border-slate-100/80 rounded-[40px] p-8 shadow-[0_24px_50px_rgba(15,23,42,0.06)] flex flex-col items-center text-center relative z-10"
         >
           <motion.div 
             animate={{ 
-              y: [0, -10, 0],
-              rotate: [0, 2, -2, 0]
+              y: [0, -4, 0],
             }}
-            transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
-            className="w-40 h-40 bg-white/5 p-1.5 backdrop-blur-xl border border-white/10 flex items-center justify-center shadow-[0_0_50px_rgba(8,145,178,0.3)] rounded-[40px]"
+            transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+            className="w-16 h-16 bg-slate-50 p-1 rounded-[20px] border border-slate-100 shadow-[0_10px_30px_rgba(0,0,0,0.04)] flex items-center justify-center mb-4 shrink-0"
           >
             <img 
-              src="https://github.com/Azgames724/Taxi-tera1.2/raw/main/Picsart_26-05-11_16-29-35-238.png" 
+              src="https://raw.githubusercontent.com/Azgames724/Taxi-tera1.2/main/Picsart_26-05-11_16-29-35-238.png" 
               alt="Taxi Tera Logo"
-              className="w-full h-full object-cover rounded-[34px]"
+              className="w-full h-full object-cover rounded-[16px]"
               referrerPolicy="no-referrer"
             />
           </motion.div>
-          <div className="text-center">
-            <motion.h1 
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="text-4xl font-black text-white tracking-tight"
-            >
-              Taxi Tera
-            </motion.h1>
-            <motion.p 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.4 }}
-              className="text-cyan-400/80 font-bold text-xs uppercase tracking-[0.2em] mt-2"
-            >
-              {t.spSub}
-            </motion.p>
+
+          <h2 className="text-xl font-black text-slate-800 tracking-tight leading-7">
+            {lang === 'en' ? 'Taxi Tera' : 'ታክሲ ተራ'}
+          </h2>
+          <p className="text-primary/95 text-[9px] font-black uppercase tracking-widest mt-1">
+            {lang === 'en' ? 'Addis Ababa Smart Transit' : 'አዲስ አበባ ስማርት ትራንዚት'}
+          </p>
+          
+          <p className="text-xs text-slate-500 font-medium leading-relaxed max-w-[280px] mt-3 mb-5">
+            {lang === 'en' 
+              ? 'Find routes and taxi stations in Addis Ababa — offline.' 
+              : 'በአዲስ አበባ ውስጥ ያሉ መንገዶችን እና የታክሲ ጣቢያዎችን ከመስመር ውጭ ያግኙ።'}
+          </p>
+
+          <div className="flex gap-1.5 justify-center mt-1">
+            {[0, 1, 2].map(i => (
+              <motion.div 
+                key={i}
+                animate={{ opacity: [0.3, 1, 0.3], scale: [1, 1.25, 1] }}
+                transition={{ repeat: Infinity, duration: 1.2, delay: i * 0.15 }}
+                className="w-1.5 h-1.5 bg-slate-800 rounded-full"
+              />
+            ))}
           </div>
         </motion.div>
+      </div>
+    );
+  }
+
+  if (isOnboarding) {
+    return (
+      <div className="fixed inset-0 z-[9999] bg-slate-50 flex flex-col items-center justify-center p-6 font-sans select-none overflow-hidden">
+        {/* Dynamic decorative warm light background gradients */}
+        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-cyan-500/5 via-amber-400/5 to-transparent pointer-events-none" />
         
+        {/* Language selector toggle in top-right */}
+        <div className="absolute top-6 right-6 flex items-center gap-2">
+          <button 
+            onClick={() => setLang(l => l === 'en' ? 'am' : 'en')}
+            className="px-3.5 py-1.5 bg-white shadow-[0_4px_16px_rgba(0,0,0,0.04)] rounded-full border border-slate-100 font-black text-[10px] text-slate-700 active:scale-95 transition-all outline-none cursor-pointer"
+          >
+            {lang === 'en' ? 'አማርኛ (AM)' : 'English (EN)'}
+          </button>
+        </div>
+
         <motion.div 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1 }}
-          className="absolute bottom-12 flex gap-1.5"
+          initial={{ opacity: 0, scale: 0.95, y: 15 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+          className="w-full max-w-sm bg-white border border-slate-100/80 rounded-[40px] p-8 shadow-[0_24px_50px_rgba(15,23,42,0.06)] flex flex-col items-center text-center relative z-10"
         >
-          {[0, 1, 2].map(i => (
-            <motion.div 
-              key={i}
-              animate={{ opacity: [0.2, 1, 0.2], scale: [1, 1.4, 1] }}
-              transition={{ repeat: Infinity, duration: 1.5, delay: i * 0.2 }}
-              className="w-1.5 h-1.5 bg-cyan-500 rounded-full"
+          <div className="w-16 h-16 bg-slate-50 p-1 rounded-[20px] border border-slate-100 shadow-[0_10px_30px_rgba(0,0,0,0.04)] flex items-center justify-center mb-4 shrink-0">
+            <img 
+              src="https://raw.githubusercontent.com/Azgames724/Taxi-tera1.2/main/Picsart_26-05-11_16-29-35-238.png" 
+              alt="Taxi Tera Logo"
+              className="w-full h-full object-cover rounded-[16px]"
+              referrerPolicy="no-referrer"
             />
-          ))}
+          </div>
+
+          <h2 className="text-xl font-black text-slate-800 tracking-tight leading-7">
+            {lang === 'en' ? 'Welcome to Taxi Tera' : 'እንኳን ወደ ታክሲ ተራ በደህና መጡ'}
+          </h2>
+          <p className="text-primary/95 text-[9px] font-black uppercase tracking-widest mt-1">
+            {lang === 'en' ? 'Addis Ababa Smart Transit' : 'አዲስ አበባ ስማርት ትራንዚት'}
+          </p>
+          
+          <p className="text-xs text-slate-500 font-medium leading-relaxed max-w-[280px] mt-2 mb-4">
+            {lang === 'en' 
+              ? 'Personalize your offline transit and taxi tera guide. Select your custom avatar and name below.' 
+              : 'የእርስዎን ከመስመር ውጭ ጉዞ ያብጁ። የሚወዱትን ምስል እና ስም ይምረጡ።'}
+          </p>
+
+          <form 
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (tempNameInput.trim()) {
+                const finalName = tempNameInput.trim();
+                setUserName(finalName);
+                setUserAvatarId(tempAvatarId);
+                localStorage.setItem('ttUserName', finalName);
+                localStorage.setItem('ttUserAvatarId', tempAvatarId);
+                setIsOnboarding(false);
+              }
+            }}
+            className="w-full flex flex-col gap-3.5"
+          >
+            {/* Onboarding Discord-style Avatar profile choices */}
+            <div className="flex flex-col items-center w-full">
+              <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 mb-2">
+                {lang === 'en' ? 'Select Avatar Profile' : 'የመገለጫ ምስል ይምረጡ'}
+              </span>
+              <div className="flex gap-2 w-full justify-center overflow-x-auto pb-1 scrollbar-hide">
+                {AVATARS.map((avatar) => {
+                  const isSelected = tempAvatarId === avatar.id;
+                  return (
+                    <button
+                      key={avatar.id}
+                      type="button"
+                      onClick={() => setTempAvatarId(avatar.id)}
+                      className={cn(
+                        "w-9 h-9 rounded-full flex items-center justify-center text-base transition-all active:scale-95 cursor-pointer border-2 shadow-sm shrink-0",
+                        avatar.bg,
+                        isSelected ? "border-slate-800 scale-110 ring-4 ring-slate-800/10" : "border-white"
+                      )}
+                    >
+                      {avatar.emoji}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="w-full relative mt-1">
+              <input 
+                type="text"
+                value={tempNameInput}
+                onChange={(e) => setTempNameInput(e.target.value)}
+                placeholder={lang === 'en' ? 'What should we call you?' : 'ስምዎት ማን ይባላል?'}
+                className="w-full bg-slate-50 text-slate-800 border border-slate-200/50 rounded-2xl px-5 py-3.5 text-xs font-bold text-center outline-none focus:border-slate-950 focus:bg-white transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.01)] leading-none"
+                maxLength={20}
+                required
+              />
+            </div>
+
+            <button 
+              type="submit"
+              disabled={!tempNameInput.trim()}
+              className="w-full py-3.5 bg-slate-900 border border-slate-900 hover:bg-slate-800 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest active:scale-[0.98] transition-all shadow-[0_8px_30px_rgba(15,23,42,0.15)] disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <span>{lang === 'en' ? "Get Started" : "እንጀምር"}</span>
+            </button>
+          </form>
         </motion.div>
       </div>
     );
@@ -241,61 +411,93 @@ export default function App() {
 
   return (
     <div className="fixed inset-0 bg-slate-50 flex flex-col font-sans">
-      {/* Search Header */}
-      <div className="absolute top-0 left-0 right-0 z-[1000] p-3 pointer-events-none">
-        <div className="max-w-md mx-auto flex flex-col gap-2">
-          <div className="flex gap-2 pointer-events-auto">
-            <div className="flex-1 bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-slate-200/50 p-0.5 flex items-center">
+      {/* Premium Floating iOS-style Top Status Bar */}
+      <div className="absolute top-4 left-4 right-4 z-[1000] pointer-events-none">
+        <div className="max-w-md mx-auto flex flex-col gap-2.5">
+          {/* Top Row: User Profile & Quick Switchers */}
+          <div className="flex items-center justify-between pointer-events-auto">
+            <button 
+              onClick={() => {
+                setTempNameInput(userName);
+                setIsNameEditOpen(true);
+              }}
+              className="flex items-center gap-2.5 bg-white/95 backdrop-blur-md p-1.5 pr-4 rounded-full shadow-[0_4px_20px_rgba(0,0,0,0.06)] border border-slate-100/80 hover:bg-slate-50 transition-all pointer-events-auto cursor-pointer text-left focus:outline-none"
+            >
+              <div className="relative shrink-0">
+                {(() => {
+                  const avatar = AVATARS.find(a => a.id === userAvatarId) || AVATARS[0];
+                  return (
+                    <div className={cn(
+                      "w-8 h-8 rounded-full border-2 border-white shadow-sm flex items-center justify-center text-sm shrink-0",
+                      avatar.bg
+                    )}>
+                      {avatar.emoji}
+                    </div>
+                  );
+                })()}
+                <span className={cn(
+                  "absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white",
+                  isOffline ? "bg-rose-500" : "bg-emerald-500"
+                )} />
+              </div>
+              <div className="flex flex-col min-w-0 max-w-[100px]">
+                <span className="text-[8px] font-black uppercase tracking-wider text-slate-400 truncate">Addis Ababa</span>
+                <span className="text-xs font-black text-slate-800 leading-none truncate">
+                  {lang === 'am' ? `ሰላም፥ ${userName || 'User'}` : `Selam, ${userName || 'User'}`}
+                </span>
+              </div>
+            </button>
+
+            <div className="flex gap-1.5 matches-action">
+              <button 
+                onClick={() => setLang(l => l === 'en' ? 'am' : 'en')}
+                className="w-9 h-9 bg-white/95 backdrop-blur-md rounded-full shadow-[0_4px_20px_rgba(0,0,0,0.06)] border border-slate-100 flex items-center justify-center font-black text-[10px] text-slate-700 active:scale-95 transition-all outline-none cursor-pointer"
+              >
+                {lang === 'en' ? 'AM' : 'EN'}
+              </button>
               <button 
                 onClick={() => setIsMenuOpen(true)}
-                className="p-2.5 text-slate-400 hover:text-primary transition-colors cursor-pointer"
+                className="w-9 h-9 bg-white/95 backdrop-blur-md rounded-full shadow-[0_4px_20px_rgba(0,0,0,0.06)] border border-slate-100 flex items-center justify-center text-slate-500 hover:text-primary active:scale-95 transition-all outline-none relative cursor-pointer"
               >
-                <Menu className="w-5 h-5" />
-              </button>
-              <div className="flex-1 flex items-center px-1">
-                <SearchIcon className="w-4 h-4 text-slate-300 mr-2" />
-                <input 
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={t.ph}
-                  className="bg-transparent border-none outline-none w-full text-xs font-semibold"
-                />
-                {searchQuery && (
-                  <button onClick={() => setSearchQuery('')} className="p-2 text-slate-300">
-                    <X className="w-4 h-4" />
-                  </button>
+                <Menu className="w-4.5 h-4.5" />
+                {!isOffline && (
+                  <span className="absolute top-2.5 right-2.5 w-1.5 h-1.5 bg-rose-500 rounded-full border border-white" />
                 )}
-              </div>
+              </button>
             </div>
-            
-            <button 
-              onClick={() => setLang(l => l === 'en' ? 'am' : 'en')}
-              className="bg-white/95 backdrop-blur-sm px-2.5 rounded-xl shadow-lg border border-slate-200/50 font-black text-[10px] text-primary h-11"
-            >
-              {lang === 'en' ? 'AM' : 'EN'}
-            </button>
           </div>
-          
-          {/* Quick Filters */}
+
+          {/* High-fidelity Stat Pills */}
           <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide pointer-events-auto">
-            <button className="flex items-center gap-1.5 bg-primary text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md shrink-0">
-              <MapIcon className="w-3 h-3" />
-              {t.all}
+            <button 
+              onClick={() => { setShowFavsOnly(false); setActiveTab('stations'); setPanelHeight('expanded'); setPanelOpen(true); }}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-wider shadow-sm shrink-0 transition-all border",
+                (!showFavsOnly && activeTab === 'stations')
+                  ? "bg-slate-900 text-white border-slate-900" 
+                  : "bg-white/90 backdrop-blur-sm text-slate-700 border-slate-100 hover:bg-slate-50"
+              )}
+            >
+              <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
+              Active Teras ({STATIONS.length})
             </button>
             <button 
-              onClick={() => { setActiveTab('stations'); setPanelOpen(true); }}
-              className="flex items-center gap-1.5 bg-white/90 backdrop-blur-sm text-slate-600 border border-slate-200/50 px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-sm shrink-0"
+              onClick={() => { setShowFavsOnly(true); setActiveTab('stations'); setPanelHeight('expanded'); setPanelOpen(true); }}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-wider shadow-sm shrink-0 transition-all border",
+                showFavsOnly 
+                  ? "bg-amber-500 text-white border-amber-500" 
+                  : "bg-white/90 backdrop-blur-sm text-slate-700 border-slate-100 hover:bg-slate-50"
+              )}
             >
-              <Bus className="w-3 h-3" />
-              {t.minibus}
+              ★ Favorites ({favorites.length})
             </button>
-            <button 
-              onClick={() => { setActiveTab('trips'); setPanelOpen(true); }}
-              className="flex items-center gap-1.5 bg-white/90 backdrop-blur-sm text-slate-600 border border-slate-200/50 px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-sm shrink-0"
-            >
-              <Navigation className="w-3 h-3 text-primary" />
-              {t.planner}
-            </button>
+            {isOffline && (
+              <span className="flex items-center gap-1.5 bg-rose-50 text-rose-600 border border-rose-100/85 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-wider shadow-sm shrink-0 animate-pulse">
+                <span className="w-1.5 h-1.5 bg-rose-500 rounded-full" />
+                Offline Mode
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -311,25 +513,30 @@ export default function App() {
           lang={lang}
           onStationClick={handleStationClick}
           panelOpen={panelOpen}
+          isOffline={isOffline}
         />
 
+        {/* Premium Gradient Fades - transitioning cleanly from background color to map */}
+        <div className="absolute top-0 inset-x-0 h-28 bg-gradient-to-b from-slate-50 via-slate-50/40 to-transparent pointer-events-none z-10" />
+        <div className="absolute bottom-0 inset-x-0 h-28 bg-gradient-to-t from-slate-50 via-slate-50/40 to-transparent pointer-events-none z-10" />
+
         {/* Floating Actions */}
-        <div className="absolute bottom-28 right-3 z-40 flex flex-col gap-2">
+        <div className="absolute bottom-32 right-4 z-40 flex flex-col gap-2">
           <button 
             onClick={handleLocateMe}
-            className="w-11 h-11 bg-white/95 backdrop-blur-sm rounded-xl shadow-xl border border-slate-200/50 flex items-center justify-center text-primary group active:scale-90 transition-all"
+            className="w-10 h-10 bg-white/95 backdrop-blur-md rounded-full shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-slate-100 flex items-center justify-center text-primary group active:scale-90 transition-all cursor-pointer"
           >
-            <Navigation className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+            <Navigation className="w-4.5 h-4.5 group-hover:rotate-12 transition-transform" />
           </button>
         </div>
       </div>
 
-      {/* Bottom Panel */}
+      {/* Slide-up Bottom Panel */}
       <motion.div 
         initial={false}
         animate={{ 
           y: selectedStation ? '100%' : 0,
-          height: panelHeight === 'expanded' ? '60vh' : panelHeight === 'full' ? '92vh' : '110px'
+          height: panelHeight === 'expanded' ? '60vh' : panelHeight === 'full' ? '92vh' : '135px'
         }}
         transition={{ type: 'spring', damping: 30, stiffness: 300, mass: 0.8 }}
         drag={selectedStation ? false : "y"}
@@ -356,49 +563,62 @@ export default function App() {
           }
         }}
         className={cn(
-          "fixed inset-x-0 bottom-0 bg-white rounded-t-[32px] shadow-[0_-8px_40px_rgba(0,0,0,0.12)] flex flex-col border-t border-slate-100 overflow-hidden",
-          panelHeight === 'full' ? "z-[1100]" : "z-[60]"
+          "fixed inset-x-0 bottom-0 bg-white rounded-t-[36px] shadow-[0_-8px_40px_rgba(0,0,0,0.08)] flex flex-col border-t border-slate-100 overflow-hidden",
+          panelHeight === 'full' ? "z-[1050]" : "z-[50]"
         )}
       >
-            <div 
-              className="p-2.5 shrink-0 cursor-grab active:cursor-grabbing flex flex-col items-center"
-              onClick={() => {
-                if (panelHeight === 'collapsed') {
-                  setPanelHeight('expanded');
-                  setPanelOpen(true);
-                } else {
-                  setPanelHeight('collapsed');
-                  setPanelOpen(false);
-                }
-              }}
-            >
-              <div className="w-10 h-1 bg-slate-200 rounded-full" />
-            </div>
-
-            {/* Tabs */}
-            <div className="px-3 flex gap-2 shrink-0">
-          {[
-            { id: 'stations', label: t.stations, icon: Bus },
-            { id: 'trips', label: t.planner, icon: Navigation }
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => { setActiveTab(tab.id as any); setPanelOpen(true); }}
-              className={cn(
-                "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-black text-[10px] uppercase tracking-wider transition-all",
-                activeTab === tab.id 
-                  ? "bg-primary text-white shadow-lg shadow-primary/20" 
-                  : "bg-slate-50 text-slate-400 hover:bg-slate-100"
-              )}
-            >
-              <tab.icon className="w-3.5 h-3.5" />
-              {tab.label}
-            </button>
-          ))}
+        {/* iOS-style slide handle */}
+        <div 
+          className="p-3 shrink-0 cursor-grab active:cursor-grabbing flex flex-col items-center"
+          onClick={() => {
+            if (panelHeight === 'collapsed') {
+              setPanelHeight('expanded');
+              setPanelOpen(true);
+            } else {
+              setPanelHeight('collapsed');
+              setPanelOpen(false);
+            }
+          }}
+        >
+          <div className="w-10 h-1 bg-slate-200 rounded-full" />
         </div>
 
+        {/* Search places, areas... inside the bottom-sheet directly, mirroring exactly screen reference */}
+        {activeTab === 'stations' && (
+          <div className="px-4 pb-3 shrink-0">
+            <div className="bg-slate-100/90 rounded-2xl p-1.5 flex items-center hover:bg-slate-200/50 transition-all border border-slate-200/5">
+              <div className="pl-2.5 pr-2 text-slate-400">
+                <SearchIcon className="w-4 h-4" />
+              </div>
+              <input 
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  if (panelHeight === 'collapsed') {
+                    setPanelHeight('expanded');
+                    setPanelOpen(true);
+                  }
+                }}
+                onFocus={() => {
+                  if (panelHeight === 'collapsed') {
+                    setPanelHeight('expanded');
+                    setPanelOpen(true);
+                  }
+                }}
+                placeholder={lang === 'en' ? "Search places, areas, teras..." : "ጣቢያዎችን, አካባቢዎችን, ተራዎችን ይፈልጉ..."}
+                className="bg-transparent border-none outline-none w-full text-xs font-bold text-slate-800 placeholder-slate-400 leading-none"
+              />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery('')} className="p-1 px-2 text-slate-400">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Content */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 scrollbar-hide pb-20">
+        <div className="flex-1 overflow-y-auto px-4 py-1.5 scrollbar-hide pb-36">
           <AnimatePresence mode="wait" initial={false}>
             {activeTab === 'stations' ? (
               <motion.div 
@@ -506,13 +726,13 @@ export default function App() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setSelectedStation(null)}
-              className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100]"
+              className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] z-[2000]"
             />
             <motion.div 
               initial={{ y: '100%' }}
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
-              transition={{ type: "spring", damping: 30, stiffness: 300, mass: 0.8 }}
+              transition={{ type: "spring", damping: 32, stiffness: 320, mass: 0.95 }}
               drag="y"
               dragConstraints={{ top: 0 }}
               dragElastic={0.1}
@@ -521,109 +741,162 @@ export default function App() {
                   setSelectedStation(null);
                 }
               }}
-              className="fixed inset-x-0 bottom-0 z-[101] bg-slate-50 flex flex-col rounded-t-[40px] shadow-2xl max-h-[92vh] overflow-hidden"
+              className="fixed inset-x-0 bottom-0 z-[2001] bg-white flex flex-col rounded-t-[40px] shadow-[0_-12px_44px_rgba(15,23,42,0.12)] max-h-[85vh] overflow-hidden border-t border-slate-100/50"
             >
-              {/* Drag Handle */}
-              <div className="w-full flex justify-center p-3 shrink-0 cursor-grab active:cursor-grabbing">
-                <div className="w-12 h-1.5 bg-slate-300 rounded-full" />
+              {/* iOS drag handle indicator strip */}
+              <div className="w-full flex justify-center pt-3 shrink-0 cursor-grab active:cursor-grabbing">
+                <div className="w-10 h-1 bg-slate-200 rounded-full" />
               </div>
 
-              <div className="h-40 bg-gradient-to-br from-primary-dark to-primary-light flex items-center justify-center relative shrink-0">
-                <button 
-                  onClick={() => setSelectedStation(null)}
-                  className="absolute top-4 left-6 p-2 bg-white/20 backdrop-blur-md rounded-xl text-white border border-white/20 active:scale-90 transition-transform"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-                <button 
-                  onClick={() => toggleFavorite(selectedStation.id)}
-                  className="absolute top-4 right-6 p-2 bg-white/20 backdrop-blur-md rounded-xl text-white border border-white/20 active:scale-90 transition-transform"
-                >
-                  <Star className={cn("w-6 h-6", favorites.includes(selectedStation.id) && "fill-amber-400 text-amber-400")} />
-                </button>
+              {/* Premium Header - Zero color blocks, gorgeous clean typography layout */}
+              <div className="px-6 pt-3 pb-4 flex items-center justify-between shrink-0 border-b border-slate-50">
+                <div className="flex items-center gap-3.5 min-w-0">
+                  {/* Glowing Transport Icon Box */}
+                  <div className={cn(
+                    "w-12 h-12 rounded-[18px] flex items-center justify-center shadow-sm shrink-0 border border-slate-100/50",
+                    selectedStation.t === 'minibus' 
+                      ? "bg-cyan-50 text-cyan-600" 
+                      : selectedStation.t === 'bajaj'
+                        ? "bg-amber-50 text-amber-600"
+                        : "bg-slate-50 text-slate-700"
+                  )}>
+                    {selectedStation.t === 'minibus' && <Bus className="w-5 h-5" />}
+                    {selectedStation.t === 'bajaj' && <span className="text-xl leading-none">🛺</span>}
+                    {selectedStation.t === 'taxi' && <RouteIcon className="w-5 h-5 text-indigo-500" />}
+                  </div>
+
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">
+                      {selectedStation.t === 'minibus' 
+                        ? (lang === 'en' ? 'Minibus Tera' : 'የሚኒባስ ተራ') 
+                        : selectedStation.t === 'bajaj'
+                          ? (lang === 'en' ? 'Bajaj Station' : 'የባጃጅ ጣቢያ')
+                          : (lang === 'en' ? 'Taxi Station' : 'የታክሲ ጣቢያ')}
+                    </span>
+                    <h2 className="text-lg font-black text-slate-800 tracking-tight leading-snug truncate">
+                      {lang === 'am' ? selectedStation.am : selectedStation.name}
+                    </h2>
+                    <div className="flex items-center gap-1 text-[10px] text-slate-400 font-bold mt-0.5 truncate">
+                      <MapPin className="w-3 h-3 text-slate-300 shrink-0" />
+                      <span className="truncate">{lang === 'am' ? selectedStation.addrAm : selectedStation.addr}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Top header control buttons */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button 
+                    onClick={() => toggleFavorite(selectedStation.id)}
+                    className="w-10 h-10 rounded-full bg-slate-50 hover:bg-slate-100/80 text-slate-600 transition-colors cursor-pointer flex items-center justify-center border border-slate-100 outline-none"
+                  >
+                    <Star className={cn("w-4.5 h-4.5", favorites.includes(selectedStation.id) ? "fill-amber-400 text-amber-400" : "text-slate-400")} />
+                  </button>
+                  <button 
+                    onClick={() => setSelectedStation(null)}
+                    className="w-10 h-10 rounded-full bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer flex items-center justify-center border border-slate-200/10 outline-none"
+                  >
+                    <X className="w-4.5 h-4.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Detail Content Section (Scrollable) */}
+              <div className="flex-1 overflow-y-auto px-6 py-4 scrollbar-hide">
                 
-                <div className="w-20 h-20 bg-white/20 backdrop-blur-md rounded-3xl border border-white/30 flex items-center justify-center text-4xl shadow-2xl">
-                  {selectedStation.t === 'minibus' ? '🚌' : selectedStation.t === 'bajaj' ? '🛺' : '🚗'}
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-y-auto px-6 py-6 pb-12 scrollbar-hide">
-                <div>
-                  <h2 className="text-2xl font-black text-slate-800 tracking-tight">{lang === 'am' ? selectedStation.am : selectedStation.name}</h2>
-                  <p className="text-slate-500 font-medium mt-1">{lang === 'am' ? selectedStation.addrAm : selectedStation.addr}</p>
-                </div>
-
-                <div className="grid grid-cols-3 gap-2 mt-4">
-                  <div className="bg-white p-2 rounded-xl border border-slate-100 text-center shadow-sm">
-                    <div className="text-primary font-black text-base">★ {selectedStation.rat}</div>
-                    <div className="text-[8px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Rating</div>
+                {/* Micro capsules info grid */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-slate-50/75 rounded-2xl p-3 text-center shadow-[inset_0_2px_4px_rgba(0,0,0,0.01)] border border-slate-100">
+                    <div className="text-cyan-600 font-black text-xs flex items-center justify-center gap-1">
+                      <span className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-ping shrink-0" />
+                      <span>{lang === 'en' ? 'Active' : 'አክቲቭ'}</span>
+                    </div>
+                    <div className="text-[8px] text-slate-400 font-black uppercase tracking-wider mt-1">{lang === 'en' ? 'Operational' : 'ሁኔታ'}</div>
                   </div>
-                  <div className="bg-white p-2 rounded-xl border border-slate-100 text-center shadow-sm">
-                    <div className="text-primary font-black text-base">{selectedStation.r.length}</div>
-                    <div className="text-[8px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Routes</div>
+
+                  <div className="bg-slate-50/75 rounded-2xl p-3 text-center shadow-[inset_0_2px_4px_rgba(0,0,0,0.01)] border border-slate-100">
+                    <div className="text-slate-800 font-extrabold text-sm leading-none">{selectedStation.r.length}</div>
+                    <div className="text-[8px] text-slate-400 font-black uppercase tracking-wider mt-1.5">{lang === 'en' ? 'Direct routes' : 'ቀጥታ መንገዶች'}</div>
                   </div>
-                  <div className="bg-white p-2 rounded-xl border border-slate-100 text-center shadow-sm">
-                    <div className="text-primary font-black text-base">24/7</div>
-                    <div className="text-[8px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Status</div>
+
+                  <div className="bg-slate-50/75 rounded-2xl p-3 text-center shadow-[inset_0_2px_4px_rgba(0,0,0,0.01)] border border-slate-100">
+                    <div className="text-amber-500 font-black text-xs flex items-center justify-center gap-0.5 leading-none">
+                      <span>★</span>
+                      <span>{selectedStation.rat}</span>
+                    </div>
+                    <div className="text-[8px] text-slate-400 font-black uppercase tracking-wider mt-1.5">{lang === 'en' ? 'Rating' : 'ደረጃ'}</div>
                   </div>
                 </div>
 
-                <div className="mt-8">
-                  <div className="flex items-center gap-2 mb-4">
-                    <RouteIcon className="w-4 h-4 text-primary" />
-                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">Planned Routes</h3>
+                {/* Direct destinations */}
+                <div className="mt-6">
+                  <div className="flex items-center gap-2 mb-3">
+                    <RouteIcon className="w-4 h-4 text-slate-400" />
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">
+                      {lang === 'en' ? 'Direct Destinations' : 'ቀጥታ መዳረሻዎች'}
+                    </h3>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {selectedStation.r.map(r => (
-                      <span key={r} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-600 shadow-sm">
-                        {r}
+                      <span key={r} className="px-3.5 py-2 bg-slate-50 hover:bg-slate-100/50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 transition-colors shadow-sm animate-in fade-in zoom-in-95 duration-150">
+                        📍 {r}
                       </span>
                     ))}
                   </div>
                 </div>
 
-                <div className="mt-8">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Clock className="w-4 h-4 text-primary" />
-                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">Operating Hours</h3>
+                {/* Operating Hours */}
+                <div className="mt-6 mb-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Clock className="w-4 h-4 text-slate-400" />
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">
+                      {lang === 'en' ? 'Operating Hours' : 'የስራ ሰዓታት'}
+                    </h3>
                   </div>
-                  <div className="bg-white rounded-2xl border border-slate-100 divide-y divide-slate-50 overflow-hidden shadow-sm">
-                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, idx) => (
-                      <div key={day} className="flex justify-between p-3.5 text-sm">
-                        <span className="font-bold text-slate-400">{day}</span>
-                        <span className="font-black text-slate-700">{selectedStation.h[idx]}</span>
-                      </div>
-                    ))}
+                  <div className="bg-slate-50/60 rounded-2xl border border-slate-100/70 divide-y divide-slate-100/40 overflow-hidden shadow-[inset_0_2px_4px_rgba(0,0,0,0.012)]">
+                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, idx) => {
+                      const dayTranslation = lang === 'am' 
+                        ? ['ሰኞ', 'ማክሰኞ', 'ረቡዕ', 'ሐሙስ', 'አርብ', 'ቅዳሜ', 'እሁድ'][idx] 
+                        : day;
+                      return (
+                        <div key={day} className="flex justify-between px-4 py-3.5 text-xs font-medium">
+                          <span className="font-bold text-slate-400">{dayTranslation}</span>
+                          <span className="font-black text-slate-700">{selectedStation.h[idx]}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-3 mt-8">
-                  <button 
-                    onClick={() => {
-                      setPlannerInitialState({ origin: selectedStation.name });
-                      setActiveTab('trips');
-                      setPanelOpen(true);
-                      setSelectedStation(null);
-                    }}
-                    className="w-full py-4 bg-primary text-white rounded-2xl font-black text-sm shadow-xl shadow-primary/30 active:scale-95 transition-all flex items-center justify-center gap-2"
-                  >
-                    <Navigation className="w-5 h-5 fill-white" />
-                    Set as Start Point
-                  </button>
-                  <button 
-                    onClick={() => {
-                      setPlannerInitialState({ dest: selectedStation.name });
-                      setActiveTab('trips');
-                      setPanelOpen(true);
-                      setSelectedStation(null);
-                    }}
-                    className="w-full py-4 bg-white border-2 border-primary text-primary rounded-2xl font-black text-sm active:scale-95 transition-all flex items-center justify-center gap-2"
-                  >
-                    <MapPin className="w-5 h-5 fill-primary" />
-                    Navigate to Here
-                  </button>
-                </div>
               </div>
+
+              {/* Persistent Sticking Action buttons at bottom margin */}
+              <div className="p-4 bg-white border-t border-slate-50 shrink-0 flex gap-3 pb-8">
+                <button 
+                  onClick={() => {
+                    setPlannerInitialState({ origin: selectedStation.name });
+                    setActiveTab('trips');
+                    setPanelOpen(true);
+                    setSelectedStation(null);
+                  }}
+                  className="flex-1 py-4 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest active:scale-[0.98] transition-all shadow-[0_8px_30px_rgba(15,23,42,0.12)] flex items-center justify-center gap-2 cursor-pointer leading-none"
+                >
+                  <MapPin className="w-3.5 h-3.5" />
+                  {lang === 'en' ? 'Set as Origin' : 'መነሻ አድርግ'}
+                </button>
+                <button 
+                  onClick={() => {
+                    setPlannerInitialState({ dest: selectedStation.name });
+                    setActiveTab('trips');
+                    setPanelOpen(true);
+                    setSelectedStation(null);
+                  }}
+                  className="flex-1 py-4 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-2xl font-black text-[10px] uppercase tracking-widest active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer leading-none border border-slate-200/20"
+                >
+                  <Navigation className="w-3.5 h-3.5 fill-current text-slate-700" />
+                  {lang === 'en' ? 'Set as Destination' : 'መድረሻ አድርግ'}
+                </button>
+              </div>
+
             </motion.div>
           </>
         )}
@@ -664,10 +937,10 @@ export default function App() {
 
               <div className="flex flex-col gap-2">
                 {[
-                  { icon: Bus, label: 'Nearby Stations', id: 'stations' },
-                  { icon: Navigation, label: 'Trip Planner', id: 'trips' },
-                  { icon: Star, label: 'Favorites', id: 'favs' },
-                  { icon: Info, label: 'About App', id: 'about' }
+                  { icon: Bus, label: lang === 'en' ? 'Stations' : 'ጣቢያዎች', id: 'stations' },
+                  { icon: Navigation, label: lang === 'en' ? 'Trip Planner' : 'ጉዞ አቅድ', id: 'trips' },
+                  { icon: Star, label: lang === 'en' ? 'Favorites' : 'ተወዳጆች', id: 'favs' },
+                  { icon: Info, label: lang === 'en' ? 'About App' : 'ስለ መተግበሪያው', id: 'about' }
                 ].map((item) => (
                   <button 
                     key={item.id}
@@ -771,6 +1044,157 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+      
+      {/* Name Edit Modal */}
+      <AnimatePresence>
+        {isNameEditOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[11000] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 pointer-events-auto"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              className="bg-white w-full max-w-sm rounded-[32px] p-6 shadow-2xl border border-slate-100 flex flex-col relative pointer-events-auto"
+            >
+              <button 
+                onClick={() => setIsNameEditOpen(false)}
+                className="absolute top-4 right-4 p-1.5 bg-slate-50 hover:bg-slate-100 rounded-full text-slate-400 transition-colors cursor-pointer focus:outline-none"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="flex flex-col items-center text-center w-full">
+                {(() => {
+                  const avatar = AVATARS.find(a => a.id === userAvatarId) || AVATARS[0];
+                  return (
+                    <div className={cn(
+                      "w-16 h-16 rounded-full border-2 border-white shadow-md flex items-center justify-center text-2xl mb-4 shrink-0",
+                      avatar.bg
+                    )}>
+                      {avatar.emoji}
+                    </div>
+                  );
+                })()}
+                <h3 className="font-black text-lg text-slate-800">
+                  {lang === 'en' ? 'Update Profile' : 'መገለጫዎን ያዘምኑ'}
+                </h3>
+                <p className="text-xs text-slate-400 font-medium mt-1 mb-5">
+                  {lang === 'en' ? 'Change your display name and avatar' : 'በመተግበሪያው ላይ የሚታየውን ስምዎን እና ምስልዎን ይቀይሩ'}
+                </p>
+
+                {/* Avatar chooser list */}
+                <div className="flex flex-col items-center w-full mb-5">
+                  <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 mb-2">
+                    {lang === 'en' ? 'Choose Avatar' : 'ምስል ይምረጡ'}
+                  </span>
+                  <div className="flex gap-2 w-full justify-center overflow-x-auto pb-1 scrollbar-hide">
+                    {AVATARS.map((avatar) => {
+                      const isSelected = userAvatarId === avatar.id;
+                      return (
+                        <button
+                          key={avatar.id}
+                          type="button"
+                          onClick={() => {
+                            setUserAvatarId(avatar.id);
+                            localStorage.setItem('ttUserAvatarId', avatar.id);
+                          }}
+                          className={cn(
+                            "w-9 h-9 rounded-full flex items-center justify-center text-base transition-all active:scale-95 cursor-pointer border-2 shadow-sm shrink-0",
+                            avatar.bg,
+                            isSelected ? "border-slate-800 scale-110 ring-4 ring-slate-800/10" : "border-white"
+                          )}
+                        >
+                          {avatar.emoji}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="w-full mb-4">
+                  <input 
+                    type="text"
+                    value={userName}
+                    onChange={(e) => {
+                      setUserName(e.target.value);
+                      localStorage.setItem('ttUserName', e.target.value);
+                    }}
+                    placeholder={lang === 'en' ? 'Display Name' : 'የሚታይ ስም'}
+                    className="w-full bg-slate-100 text-slate-800 font-bold border border-slate-200/50 rounded-xl px-4 py-3 text-sm text-center outline-none focus:border-slate-800 focus:bg-white transition-all"
+                    maxLength={20}
+                  />
+                </div>
+
+                <button 
+                  onClick={() => setIsNameEditOpen(false)}
+                  className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-black text-xs uppercase tracking-widest active:scale-95 transition-transform cursor-pointer"
+                >
+                  {lang === 'en' ? 'Save Changes' : 'ለውጦችን አስቀምጥ'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* iOS Premium Bottom Tab Bar */}
+      <div className="fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-slate-100/70 p-2 pb-5 sm:p-2.5 sm:pb-3.5 flex justify-around items-center z-[1100] shadow-[0_-4px_24px_rgba(0,0,0,0.03)] select-none">
+        {[
+          { id: 'stations', label: lang === 'en' ? 'Stations' : 'ጣቢያዎች', icon: Bus },
+          { id: 'trips', label: lang === 'en' ? 'Planner' : 'አቅጣጫ', icon: Navigation },
+          { id: 'favs', label: lang === 'en' ? 'Favorites' : 'ተወዳጆች', icon: Star },
+          { id: 'about', label: lang === 'en' ? 'About Tejo' : 'ስለ መተግበሪያው', icon: Info }
+        ].map((item) => {
+          const isActive = (item.id === 'stations')
+            ? (activeTab === 'stations' && !showFavsOnly && panelOpen)
+            : (item.id === 'trips')
+              ? (activeTab === 'trips' && panelOpen)
+              : (item.id === 'favs')
+                ? (activeTab === 'stations' && showFavsOnly && panelOpen)
+                : false;
+
+          return (
+            <button
+              key={item.id}
+              onClick={() => {
+                if (item.id === 'stations') {
+                  setShowFavsOnly(false);
+                  setActiveTab('stations');
+                  setPanelHeight('expanded');
+                  setPanelOpen(true);
+                } else if (item.id === 'trips') {
+                  setActiveTab('trips');
+                  setPanelHeight('expanded');
+                  setPanelOpen(true);
+                } else if (item.id === 'favs') {
+                  setShowFavsOnly(true);
+                  setActiveTab('stations');
+                  setPanelHeight('expanded');
+                  setPanelOpen(true);
+                } else if (item.id === 'about') {
+                  setIsAboutOpen(true);
+                }
+              }}
+              className="flex flex-col items-center justify-center py-1 px-4 rounded-xl transition-all cursor-pointer relative"
+            >
+              <item.icon className={cn(
+                "w-5 h-5 mb-0.5 transition-all duration-200 active:scale-95",
+                isActive ? "text-primary stroke-[2.5]" : "text-slate-400 stroke-[1.8]"
+              )} />
+              <span className={cn(
+                "text-[9px] font-black tracking-tight transition-colors duration-150",
+                isActive ? "text-primary" : "text-slate-400"
+              )}>
+                {item.label}
+              </span>
+            </button>
+          )
+        })}
+      </div>
     </div>
   );
 }

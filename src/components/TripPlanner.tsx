@@ -6,13 +6,92 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Search, MapPin, ArrowRightLeft, Train, Navigation, Info } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { COORDS, TRANSLATIONS, Station } from '../data/transitData';
+import { COORDS, TRANSLATIONS, Station, STATIONS } from '../data/transitData';
 import { findTripPaths, TripPath, enhancePathWithGeometry } from '../lib/routing';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
+}
+
+// Robust fuzzy score calculation for typotolerance
+function getFuzzyMatchScore(query: string, candidate: string): number {
+  const q = query.toLowerCase().trim();
+  const c = candidate.toLowerCase().trim();
+
+  if (!q) return -1;
+  
+  // Exact match gets highest priority
+  if (c === q) return 1000;
+
+  // Prefix match gets high priority
+  if (c.startsWith(q)) return 800 + q.length * 10;
+
+  // Word prefix match: e.g., "bole" in "Bole Bridge" or "Bole Medhanialem"
+  const words = c.split(/[\s()\-]+/);
+  for (let i = 0; i < words.length; i++) {
+    if (words[i].startsWith(q)) {
+      return 600 + q.length * 5 - i; // prefer earlier words
+    }
+  }
+
+  // General substring includes
+  if (c.includes(q)) return 400 + q.length * 2;
+
+  // Fuzzy matching for typos (e.g. mexco -> mexico, megnagna -> megenagna)
+  const cleanStr = (str: string) => str.replace(/[^a-z0-9]/g, '');
+  const qClean = cleanStr(q);
+  const cClean = cleanStr(c);
+
+  // If query is too short, don't allow broad distance matches
+  if (qClean.length < 3) return -1;
+
+  // Levenshtein distance
+  const track = Array(qClean.length + 1).fill(null).map(() => Array(cClean.length + 1).fill(null));
+  for (let i = 0; i <= cClean.length; i += 1) {
+    track[0][i] = i;
+  }
+  for (let j = 0; j <= qClean.length; j += 1) {
+    track[j][0] = j;
+  }
+  for (let j = 1; j <= qClean.length; j += 1) {
+    for (let i = 1; i <= cClean.length; i += 1) {
+      const indicator = cClean[i - 1] === qClean[j - 1] ? 0 : 1;
+      track[j][i] = Math.min(
+        track[j - 1][i] + 1, // deletion
+        track[j][i - 1] + 1, // insertion
+        track[j - 1][i - 1] + indicator // substitution
+      );
+    }
+  }
+  const distance = track[qClean.length][cClean.length];
+  
+  const maxLength = Math.max(cClean.length, qClean.length);
+  const similarityScore = maxLength === 0 ? 100 : ((maxLength - distance) / maxLength) * 100;
+
+  // Letter matching in sequence
+  let qIdx = 0;
+  let matchesInSequence = 0;
+  for (let cIdx = 0; cIdx < cClean.length && qIdx < qClean.length; cIdx++) {
+    if (cClean[cIdx] === qClean[qIdx]) {
+      matchesInSequence++;
+      qIdx++;
+    }
+  }
+  
+  const seqRatio = matchesInSequence / qClean.length;
+  const firstLetterBonus = qClean[0] === cClean[0] ? 1.2 : 0.8;
+  const combinedFuzzy = (similarityScore * 0.4 + seqRatio * 60) * firstLetterBonus;
+
+  // Score threshold for considering it a "similar" word
+  const threshold = qClean.length <= 3 ? 75 : qClean.length <= 5 ? 62 : 52;
+  
+  if (combinedFuzzy >= threshold) {
+    return 100 + combinedFuzzy;
+  }
+
+  return -1;
 }
 
 interface TripPlannerProps {
@@ -50,15 +129,78 @@ export default function TripPlanner({ lang, onPathSelect, userLocation, initialO
 
   const [walkingLeg, setWalkingLeg] = useState<{ distance: number; duration: number } | null>(null);
 
-  const filteredOrigin = useMemo(() => 
-    locations.filter(l => l.toLowerCase().includes(origin.toLowerCase())).slice(0, 5),
-    [origin, locations]
-  );
+  const filteredOrigin = useMemo(() => {
+    if (!origin.trim()) {
+      return locations.slice(0, 5);
+    }
+    const q = origin.toLowerCase().trim();
+    const isQueryAmharic = /[\u1200-\u137F]/.test(q);
 
-  const filteredDest = useMemo(() => 
-    locations.filter(l => l.toLowerCase().includes(destination.toLowerCase())).slice(1, 6), // Skip "Current Location" for destinatn
-    [destination, locations]
-  );
+    return locations
+      .map(name => {
+        if (name === 'Current Location') {
+          const isMatch = 'current location'.includes(q) || 'አሁን'.includes(q) || 'አሁን ያሉበት ቦታ'.includes(q);
+          return { name, score: isMatch ? 2000 : -1 };
+        }
+
+        // Check if Amharic query matches this candidate's station
+        if (isQueryAmharic) {
+          const assocStations = STATIONS.filter(s => 
+            s.name.toLowerCase().includes(name.toLowerCase()) || 
+            s.addr.toLowerCase().includes(name.toLowerCase())
+          );
+          const amMatch = assocStations.some(s => 
+            s.am.includes(origin.trim()) || s.addrAm.includes(origin.trim())
+          );
+          if (amMatch) {
+            return { name, score: 900 };
+          }
+        }
+
+        const score = getFuzzyMatchScore(origin, name);
+        return { name, score };
+      })
+      .filter(item => item.score >= 0)
+      .sort((a, b) => b.score - a.score)
+      .map(item => item.name)
+      .slice(0, 5);
+  }, [origin, locations]);
+
+  const filteredDest = useMemo(() => {
+    if (!destination.trim()) {
+      return locations.filter(l => l !== 'Current Location').slice(0, 5);
+    }
+    const q = destination.toLowerCase().trim();
+    const isQueryAmharic = /[\u1200-\u137F]/.test(q);
+
+    return locations
+      .map(name => {
+        if (name === 'Current Location') {
+          return { name, score: -1 };
+        }
+
+        // Check if Amharic query matches this candidate's station
+        if (isQueryAmharic) {
+          const assocStations = STATIONS.filter(s => 
+            s.name.toLowerCase().includes(name.toLowerCase()) || 
+            s.addr.toLowerCase().includes(name.toLowerCase())
+          );
+          const amMatch = assocStations.some(s => 
+            s.am.includes(destination.trim()) || s.addrAm.includes(destination.trim())
+          );
+          if (amMatch) {
+            return { name, score: 900 };
+          }
+        }
+
+        const score = getFuzzyMatchScore(destination, name);
+        return { name, score };
+      })
+      .filter(item => item.score >= 0)
+      .sort((a, b) => b.score - a.score)
+      .map(item => item.name)
+      .slice(0, 5);
+  }, [destination, locations]);
 
   const handleSearch = async () => {
     if (!origin || !destination) return;
@@ -131,30 +273,52 @@ export default function TripPlanner({ lang, onPathSelect, userLocation, initialO
   };
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="bg-white rounded-xl p-3 shadow-md border border-slate-200/50">
-        <div className="flex flex-col gap-2 relative">
+    <div className="flex flex-col gap-4">
+      <div className="bg-slate-50/80 rounded-[28px] p-4 border border-slate-100/80 shadow-[0_4px_24px_rgba(15,23,42,0.02)]">
+        <div className="flex flex-col gap-3 relative">
           {/* Origin */}
           <div className="relative">
-            <div className="flex items-center gap-2.5 p-2.5 bg-slate-50 rounded-lg border border-slate-200 focus-within:border-primary transition-colors">
-              <MapPin className="w-4 h-4 text-blue-500" />
-              <input 
-                value={origin}
-                onChange={(e) => { setOrigin(e.target.value); setShowOriginAuto(true); }}
-                onFocus={() => setShowOriginAuto(true)}
-                placeholder="Origin"
-                className="bg-transparent border-none outline-none w-full text-xs font-semibold"
-              />
+            <div className="flex items-center gap-2.5 p-2 bg-white rounded-2xl border border-slate-100 hover:bg-slate-50/50 focus-within:border-slate-900/40 focus-within:bg-white transition-all shadow-sm">
+              <div className="w-8 h-8 rounded-xl bg-cyan-50 flex items-center justify-center text-cyan-600 shrink-0">
+                <MapPin className="w-4 h-4 fill-current" />
+              </div>
+              <div className="flex-1">
+                <div className="text-[8px] font-black uppercase tracking-wider text-slate-400 leading-none mb-0.5">{lang === 'am' ? 'መነሻ' : 'Origin'}</div>
+                <input 
+                  value={origin}
+                  onChange={(e) => { setOrigin(e.target.value); setShowOriginAuto(true); }}
+                  onFocus={() => setShowOriginAuto(true)}
+                  placeholder={lang === 'am' ? 'የት መነሳት ይፈልጋሉ?' : 'Where are you starting from?'}
+                  className="bg-transparent border-none outline-none w-full text-xs font-black text-slate-800 placeholder-slate-400 leading-none py-0.5"
+                />
+              </div>
             </div>
-            {showOriginAuto && origin && filteredOrigin.length > 0 && (
-              <div className="absolute top-full left-0 right-0 z-50 bg-white border border-slate-200 rounded-lg mt-1 shadow-xl overflow-hidden">
+            {showOriginAuto && filteredOrigin.length > 0 && (
+              <div className="absolute top-full left-0 right-0 z-50 bg-white border border-slate-100 rounded-2xl mt-1.5 shadow-[0_12px_44px_rgba(15,23,42,0.08)] overflow-hidden">
                 {filteredOrigin.map(l => (
                   <button 
                     key={l}
+                    type="button"
                     onClick={() => { setOrigin(l); setShowOriginAuto(false); }}
-                    className="w-full text-left px-3 py-2.5 hover:bg-slate-50 text-[11px] font-bold border-b border-slate-100 last:border-none"
+                    className="w-full text-left px-4 py-3 hover:bg-slate-50 text-xs border-b border-slate-50 last:border-none transition-colors cursor-pointer"
                   >
-                    {l}
+                    {l === 'Current Location' ? (
+                      <span className="font-bold text-slate-700">
+                        {lang === 'am' ? '📍 አሁን ያሉበት ቦታ' : '📍 Current Location'}
+                      </span>
+                    ) : (
+                      <div className="flex justify-between items-center w-full">
+                        <span className="font-extrabold text-slate-800">{l}</span>
+                        {(() => {
+                          const matched = STATIONS.find(s => s.name.toLowerCase().includes(l.toLowerCase()) || s.addr.toLowerCase().includes(l.toLowerCase()));
+                          return matched ? (
+                            <span className="text-[9px] text-slate-400 font-bold bg-slate-50 px-2 py-0.5 rounded-full border border-slate-100 shrink-0">
+                              {matched.am.split(' ')[0]}
+                            </span>
+                          ) : null;
+                        })()}
+                      </div>
+                    )}
                   </button>
                 ))}
               </div>
@@ -162,34 +326,52 @@ export default function TripPlanner({ lang, onPathSelect, userLocation, initialO
           </div>
 
           {/* Swap Button */}
-          <button 
-            onClick={handleSwap}
-            className="absolute right-6 top-1/2 -translate-y-1/2 z-10 p-1.5 bg-white rounded-full border border-slate-200 shadow-sm text-primary hover:scale-110 active:scale-95 transition-all"
-          >
-            <ArrowRightLeft className="w-3 h-3 rotate-90" />
-          </button>
+          <div className="absolute right-6 top-[40px] -translate-y-1/2 z-10">
+            <button 
+              onClick={handleSwap}
+              className="p-2 bg-white hover:bg-slate-50 rounded-full border border-slate-100 shadow-md text-slate-700 active:scale-95 transition-all outline-none cursor-pointer"
+            >
+              <ArrowRightLeft className="w-3.5 h-3.5 rotate-90" />
+            </button>
+          </div>
 
           {/* Destination */}
           <div className="relative">
-            <div className="flex items-center gap-2.5 p-2.5 bg-slate-50 rounded-lg border border-slate-200 focus-within:border-primary transition-colors">
-              <MapPin className="w-4 h-4 text-emerald-500" />
-              <input 
-                value={destination}
-                onChange={(e) => { setDestination(e.target.value); setShowDestAuto(true); }}
-                onFocus={() => setShowDestAuto(true)}
-                placeholder="Destination"
-                className="bg-transparent border-none outline-none w-full text-xs font-semibold"
-              />
+            <div className="flex items-center gap-2.5 p-2 bg-white rounded-2xl border border-slate-100 hover:bg-slate-50/50 focus-within:border-slate-900/40 focus-within:bg-white transition-all shadow-sm">
+              <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
+                <MapPin className="w-4 h-4 fill-current" />
+              </div>
+              <div className="flex-1">
+                <div className="text-[8px] font-black uppercase tracking-wider text-slate-400 leading-none mb-0.5">{lang === 'am' ? 'መድረሻ' : 'Destination'}</div>
+                <input 
+                  value={destination}
+                  onChange={(e) => { setDestination(e.target.value); setShowDestAuto(true); }}
+                  onFocus={() => setShowDestAuto(true)}
+                  placeholder={lang === 'am' ? 'የት መድረስ ይፈልጋሉ?' : 'Where do you want to go?'}
+                  className="bg-transparent border-none outline-none w-full text-xs font-black text-slate-800 placeholder-slate-400 leading-none py-0.5"
+                />
+              </div>
             </div>
-            {showDestAuto && destination && filteredDest.length > 0 && (
-              <div className="absolute top-full left-0 right-0 z-50 bg-white border border-slate-200 rounded-lg mt-1 shadow-xl overflow-hidden">
+            {showDestAuto && filteredDest.length > 0 && (
+              <div className="absolute top-full left-0 right-0 z-50 bg-white border border-slate-100 rounded-2xl mt-1.5 shadow-[0_12px_44px_rgba(15,23,42,0.08)] overflow-hidden">
                 {filteredDest.map(l => (
                   <button 
                     key={l}
+                    type="button"
                     onClick={() => { setDestination(l); setShowDestAuto(false); }}
-                    className="w-full text-left px-3 py-2.5 hover:bg-slate-50 text-[11px] font-bold border-b border-slate-100 last:border-none"
+                    className="w-full text-left px-4 py-3 hover:bg-slate-50 text-xs border-b border-slate-50 last:border-none transition-colors cursor-pointer"
                   >
-                    {l}
+                    <div className="flex justify-between items-center w-full">
+                      <span className="font-extrabold text-slate-800">{l}</span>
+                      {(() => {
+                        const matched = STATIONS.find(s => s.name.toLowerCase().includes(l.toLowerCase()) || s.addr.toLowerCase().includes(l.toLowerCase()));
+                        return matched ? (
+                          <span className="text-[9px] text-slate-400 font-bold bg-slate-50 px-2 py-0.5 rounded-full border border-slate-100 shrink-0">
+                            {matched.am.split(' ')[0]}
+                          </span>
+                        ) : null;
+                      })()}
+                    </div>
                   </button>
                 ))}
               </div>
@@ -199,18 +381,20 @@ export default function TripPlanner({ lang, onPathSelect, userLocation, initialO
           <button 
             onClick={handleSearch}
             disabled={isSearching}
-            className="w-full py-3 bg-primary text-white rounded-lg font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-primary-dark active:scale-[0.98] transition-all shadow-md disabled:opacity-50"
+            className="w-full py-4 bg-slate-900 border border-slate-900 hover:bg-slate-800 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-[0_8px_30px_rgba(15,23,42,0.12)] disabled:opacity-35 cursor-pointer leading-none"
           >
             {isSearching ? (
               <motion.div 
                 animate={{ rotate: 360 }}
                 transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
-                className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full"
+                className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full"
               />
             ) : (
-              <Navigation className="w-4 h-4" />
+              <Navigation className="w-3.5 h-3.5 fill-current" />
             )}
-            {isSearching ? 'Calculating...' : 'Find Routes'}
+            {isSearching 
+              ? (lang === 'am' ? 'በማስላት ላይ...' : 'Calculating...') 
+              : (lang === 'am' ? 'አቅጣጫዎችን ፈልግ' : 'Find Routes')}
           </button>
         </div>
       </div>
