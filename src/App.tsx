@@ -12,7 +12,8 @@ import {
   ChevronLeft,
   Info,
   Map as MapIcon,
-  Route as RouteIcon
+  Route as RouteIcon,
+  Heart
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Map from './components/Map';
@@ -26,6 +27,8 @@ import {
   COORDS
 } from './data/transitData';
 import { TripPath } from './lib/routing';
+import splashScreenImg from './assets/images/splash_screen_1780219209676.png';
+import donationQrImg from './assets/images/donation_qr_1780219223400.png';
 
 import { twMerge } from 'tailwind-merge';
 import { clsx, type ClassValue } from 'clsx';
@@ -50,24 +53,208 @@ function isInsideAddis(lat: number, lng: number): boolean {
   );
 }
 
-const BrandEmblem = () => (
-  <div className="relative flex items-center justify-center w-20 h-20 bg-gradient-to-tr from-cyan-500 via-emerald-500 to-amber-500 rounded-[28px] p-[3px] shadow-[0_16px_36px_-6px_rgba(8,145,178,0.35)] mb-6 select-none">
-    <div className="w-full h-full bg-slate-900 rounded-[25px] flex flex-col items-center justify-center relative overflow-hidden">
-      {/* Abstract geometric route indicators inside the emblem */}
-      <div className="absolute top-1/2 left-0 right-0 h-[1.5px] bg-cyan-500/15 -translate-y-1/2" />
-      <div className="absolute left-1/2 top-0 bottom-0 w-[1.5px] bg-amber-500/15 -translate-x-1/2" />
-      <div className="absolute inset-2 border border-slate-800/60 rounded-[18px] pointer-events-none" />
+const TaxiMapPin = () => (
+  <motion.div 
+    animate={{ 
+      y: [0, -8, 0],
+    }}
+    transition={{ repeat: Infinity, duration: 2.2, ease: "easeInOut" }}
+    className="relative w-28 h-28 flex items-center justify-center cursor-pointer select-none drop-shadow-[0_12px_24px_rgba(0,0,0,0.18)]"
+  >
+    <svg viewBox="0 0 100 120" className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+      {/* Outer map pin solid shape */}
+      <path 
+        d="M50 112 C50 112, 88 78, 88 48 A 38 38 0 1 0 12 48 C 12 78, 50 112, 50 112 Z" 
+        fill="#111111" 
+      />
       
-      {/* Ambient background pulsing aura */}
-      <div className="absolute w-10 h-10 bg-cyan-400/10 rounded-full blur-md" />
+      {/* Circle white background cutout inside pin */}
+      <circle cx="50" cy="48" r="26" fill="#FFFFFF" />
       
-      <Bus className="w-8 h-8 text-cyan-400 drop-shadow-[0_2px_8px_rgba(34,211,238,0.4)] relative z-10" />
-    </div>
+      {/* Taxi Car Icon (Stylized, thick black vector outline) */}
+      <path 
+        d="M34 50 L36 41 C37 38, 39 37, 43 37 L57 37 C61 37, 63 38, 64 41 L66 50 C69 50, 70 52, 70 55 L70 59 C70 61, 68.5 62, 67 62 L67 66 C67 67.5, 65.5 68, 64 68 C62.5 68, 61 67.5, 61 66 L61 62 L39 62 L39 66 C39 67.5, 37.5 68, 36 68 C34.5 68, 33 67.5, 33 66 L33 62 C31.5 62, 30 61, 30 59 L30 55 C30 52, 31 50, 34 50 Z" 
+        fill="#111111" 
+      />
+      {/* Windshield */}
+      <path d="M40 40 L60 40 L57 46 L43 46 Z" fill="#FFFFFF" stroke="#111111" strokeWidth="1" />
+      {/* Lights */}
+      <circle cx="36" cy="55" r="2" fill="#FFCD00" />
+      <circle cx="64" cy="55" r="2" fill="#FFCD00" />
+      {/* Bumper grill */}
+      <rect x="44" y="56" width="12" height="2" rx="1" fill="#FFFFFF" />
+      
+      {/* Checkerboard board wrap below car */}
+      <g transform="translate(35, 59)">
+        {/* Row 1 */}
+        <rect x="0" y="0" width="3" height="3" fill="#111111" />
+        <rect x="3" y="0" width="3" height="3" fill="#FFCD00" />
+        <rect x="6" y="0" width="3" height="3" fill="#111111" />
+        <rect x="9" y="0" width="3" height="3" fill="#FFCD00" />
+        <rect x="12" y="0" width="3" height="3" fill="#111111" />
+        <rect x="15" y="0" width="3" height="3" fill="#FFCD00" />
+        <rect x="18" y="0" width="3" height="3" fill="#111111" />
+        <rect x="21" y="0" width="3" height="3" fill="#FFCD00" />
+        <rect x="24" y="0" width="3" height="3" fill="#111111" />
+        <rect x="27" y="0" width="3" height="3" fill="#FFCD00" />
+
+        {/* Row 2 */}
+        <rect x="0" y="3" width="3" height="3" fill="#FFCD00" />
+        <rect x="3" y="3" width="3" height="3" fill="#111111" />
+        <rect x="6" y="3" width="3" height="3" fill="#FFCD00" />
+        <rect x="9" y="3" width="3" height="3" fill="#111111" />
+        <rect x="12" y="3" width="3" height="3" fill="#FFCD00" />
+        <rect x="15" y="3" width="3" height="3" fill="#111111" />
+        <rect x="18" y="3" width="3" height="3" fill="#FFCD00" />
+        <rect x="21" y="3" width="3" height="3" fill="#111111" />
+        <rect x="24" y="3" width="3" height="3" fill="#FFCD00" />
+        <rect x="27" y="3" width="3" height="3" fill="#111111" />
+      </g>
+    </svg>
+  </motion.div>
+);
+
+const BrandEmblem = TaxiMapPin; // Maintain backwards compatibility for onboarding views
+
+const AddisSkylineSVG = () => (
+  <svg viewBox="0 0 800 200" className="w-full h-32 opacity-25 mt-auto text-yellow-950 pointer-events-none select-none max-w-lg" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" xmlns="http://www.w3.org/2000/svg">
+    {/* Ground Baseline */}
+    <line x1="0" y1="180" x2="800" y2="180" />
     
-    {/* Overlapping direction badge */}
-    <div className="absolute -bottom-1 -right-1 bg-amber-500 text-white rounded-full p-1.5 border-[2.5px] border-white shadow-md flex items-center justify-center">
-      <Navigation className="w-3.5 h-3.5 fill-current text-white rotate-45" />
+    {/* St. George Cathedral (Octagonal historic dome) */}
+    <path d="M50 180 L50 145 L60 145 L60 115 L80 95 L100 95 L120 115 L120 145 L130 145 L130 180 Z" />
+    <path d="M60 145 L120 145" />
+    <path d="M70 115 L110 115" />
+    <path d="M90 95 L90 78" /> {/* Cross spire */}
+    <rect x="75" y="120" width="30" height="25" rx="2" />
+    
+    {/* Tiglachin Obelisk Monument */}
+    <path d="M190 180 L205 75 L215 75 L230 180 Z" />
+    <path d="M210 75 L210 45 L211 45 L210 38 L209 45 L210 45" />
+    <path d="M180 180 L195 140 L195 180 Z" /> {/* Front monument details */}
+    
+    {/* Modern Landmark HighRise Tower */}
+    <rect x="280" y="55" width="45" height="125" rx="3" />
+    <line x1="290" y1="55" x2="290" y2="180" strokeDasharray="3,3" />
+    <line x1="302" y1="55" x2="302" y2="180" strokeDasharray="3,3" />
+    <line x1="315" y1="55" x2="315" y2="180" strokeDasharray="3,3" />
+    <line x1="280" y1="85" x2="325" y2="85" />
+    <line x1="280" y1="115" x2="325" y2="115" />
+    <line x1="280" y1="145" x2="325" y2="145" />
+    <circle cx="302" cy="42" r="3" />
+    <line x1="302" y1="42" x2="302" y2="24" />
+    
+    {/* Commercial HQ Building with Glass Window Pane grid */}
+    <rect x="360" y="85" width="60" height="95" rx="2" />
+    <line x1="360" y1="105" x2="420" y2="105" />
+    <line x1="360" y1="125" x2="420" y2="125" />
+    <line x1="360" y1="145" x2="420" y2="145" />
+    <line x1="360" y1="165" x2="420" y2="165" />
+    <line x1="375" y1="85" x2="375" y2="180" />
+    <line x1="390" y1="85" x2="390" y2="180" />
+    <line x1="405" y1="85" x2="405" y2="180" />
+
+    {/* Historic Monumental Gate (Archway) */}
+    <path d="M480 180 L480 105 A 30 30 0 0 1 540 105 L540 180 L525 180 L525 120 A 15 15 0 0 0 495 120 L495 180 Z" />
+    <rect x="490" y="85" width="40" height="20" rx="3" />
+    <circle cx="510" cy="72" r="4" />
+    
+    {/* National Theatre / Dome Structure */}
+    <path d="M600 180 L600 155 L610 155 A 40 40 0 0 1 690 155 L700 155 L700 180 Z" />
+    <rect x="635" y="115" width="30" height="12" />
+    <line x1="650" y1="115" x2="650" y2="100" />
+    
+    {/* Sun background indicator */}
+    <circle cx="600" cy="70" r="14" strokeDasharray="3,3" />
+  </svg>
+);
+
+const AddisMinibusTaxi = () => (
+  <motion.div 
+    initial={{ x: -80, opacity: 0 }}
+    animate={{ x: 0, opacity: 1 }}
+    transition={{ delay: 0.4, duration: 0.7, ease: "easeOut" }}
+    className="relative w-52 h-20 -mt-10 self-center z-10 select-none pointer-events-none"
+  >
+    <svg viewBox="0 0 180 80" className="w-full h-full drop-shadow-md" xmlns="http://www.w3.org/2000/svg">
+      {/* Wheels shadow */}
+      <ellipse cx="45" cy="69" rx="14" ry="3" fill="rgba(0,0,0,0.22)" />
+      <ellipse cx="135" cy="69" rx="14" ry="3" fill="rgba(0,0,0,0.22)" />
+      
+      {/* Toyota Hiace styled shell body */}
+      {/* White Roof/Upper Half */}
+      <path d="M26 43 L38 23 C40 20, 45 19, 55 19 L155 19 C160 19, 163 22, 165 27 L171 43 Z" fill="#FFFFFF" />
+      
+      {/* Addis Blue Lower half */}
+      <path d="M22 43 L171 43 C174 43, 175 45, 174 49 L168 65 C167 67, 164 68, 160 68 L34 68 C30 68, 27 66, 26 63 L22 47 C21 45, 21 43, 22 43 Z" fill="#0D47A1" />
+      
+      {/* White Stripe down middle of side */}
+      <rect x="23" y="48" width="150" height="3" fill="#FFFFFF" opacity="0.9" />
+      
+      {/* Windows in charcoal gray */}
+      {/* Windshield */}
+      <path d="M29 41 L39 25 C41 23, 43 23, 45 23 L62 23 L57 41 Z" fill="#263238" />
+      {/* Driver cabin side window */}
+      <path d="M62 41 L65 23 L88 23 L88 41 Z" fill="#1C2833" />
+      {/* Middle side sliding passenger window */}
+      <rect x="93" y="23" width="34" height="18" rx="1.5" fill="#1C2833" />
+      {/* Rear passenger window */}
+      <path d="M132 23 L158 23 C160 23, 161 24, 162 26 L165 41 L132 41 Z" fill="#1C2833" />
+      
+      {/* Door handle indicators */}
+      <rect x="98" y="46" width="10" height="2" rx="0.5" fill="#37474F" />
+      <rect x="73" y="46" width="6" height="2" rx="0.5" fill="#37474F" />
+      
+      {/* Front lights, amber signal yellow */}
+      <circle cx="23.5" cy="50" r="3.5" fill="#FFC107" />
+      
+      {/* Front license headlight glow shadow */}
+      <path d="M23.5 50 L10 50 L12 58 L23.5 50 Z" fill="#FFEB3B" opacity="0.35" />
+      
+      {/* Wheels */}
+      {/* Rear wheels structure with metallic hubs */}
+      <circle cx="45" cy="63" r="11" fill="#212121" />
+      <circle cx="45" cy="63" r="8" fill="#546E7A" />
+      <circle cx="45" cy="63" r="4" fill="#CFD8DC" />
+      
+      <circle cx="135" cy="63" r="11" fill="#212121" />
+      <circle cx="135" cy="63" r="8" fill="#546E7A" />
+      <circle cx="135" cy="63" r="4" fill="#CFD8DC" />
+    </svg>
+  </motion.div>
+);
+
+const TelebirrLogo = () => (
+  <div className="flex items-center gap-1.5 justify-center select-none scale-105 bg-slate-100 px-5 py-2.5 rounded-full border border-slate-200/45 shadow-sm">
+    <svg viewBox="0 0 40 40" className="w-8 h-8 pointer-events-none" xmlns="http://www.w3.org/2000/svg">
+      {/* Star sweeping brand badge */}
+      <path 
+        d="M20 3 L23.5 13.5 L34 13.5 L25.5 19.5 L28.5 30 L20 23 L11.5 30 L14.5 19.5 L6 13.5 L16.5 13.5 Z" 
+        fill="#1064AF" 
+      />
+      <path 
+        d="M20 22 C20 22, 10 24, 10 31 C10 36, 17 37, 21 35 C24.5 33.5, 26 30, 26 27" 
+        stroke="#1064AF" 
+        strokeWidth="3.2" 
+        fill="none" 
+        strokeLinecap="round" 
+      />
+    </svg>
+    <div className="flex flex-col items-start leading-none">
+      <span className="text-sky-600 font-extrabold text-[12.5px] tracking-wide">ቴሌብር</span>
+      <span className="text-amber-500 font-black text-[13.5px] tracking-tight -mt-0.5">telebirr</span>
     </div>
+  </div>
+);
+
+const DonationQRCode = () => (
+  <div className="relative w-48 h-48 bg-white border-[3px] border-[#FED100] rounded-2xl p-1.5 flex items-center justify-center shadow-inner overflow-hidden select-none">
+    <img 
+      src={donationQrImg} 
+      alt="Telebirr Donation QR" 
+      className="w-full h-full object-cover rounded-xl"
+      referrerPolicy="no-referrer"
+    />
   </div>
 );
 
@@ -85,6 +272,14 @@ export default function App() {
     return (localStorage.getItem('ttLang') as 'en' | 'am') || 'en';
   });
   const [isSplash, setIsSplash] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsSplash(false);
+    }, 2800);
+    return () => clearTimeout(timer);
+  }, []);
+
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'stations' | 'trips'>('trips');
@@ -146,6 +341,8 @@ export default function App() {
   const [tempNameInput, setTempNameInput] = useState('');
   const [tempAvatarId, setTempAvatarId] = useState<string>('1');
   const [isNameEditOpen, setIsNameEditOpen] = useState(false);
+  const [isSupportOpen, setIsSupportOpen] = useState(false);
+  const [donationAmount, setDonationAmount] = useState('10.00');
 
   useEffect(() => {
     const handleOnline = () => {
@@ -178,10 +375,7 @@ export default function App() {
 
   const t = TRANSLATIONS[lang];
 
-  useEffect(() => {
-    const timer = setTimeout(() => setIsSplash(false), 2000);
-    return () => clearTimeout(timer);
-  }, []);
+  // The splash screen is interactive and dismissed only when clicking the 'Get Started' button.
 
   useEffect(() => {
     localStorage.setItem('ttLang', lang);
@@ -306,56 +500,49 @@ export default function App() {
 
   if (isSplash) {
     return (
-      <div className="fixed inset-0 z-[9999] bg-slate-50/95 flex flex-col items-center justify-center p-6 font-sans select-none overflow-hidden">
-        {/* Dynamic decorative warm light background gradients */}
-        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-cyan-500/10 via-amber-400/5 to-transparent pointer-events-none" />
-        
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.94, y: 15 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: -10 }}
-          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          className="w-full max-w-sm bg-white/90 backdrop-blur-xl border border-slate-200/40 rounded-[36px] p-10 shadow-[0_32px_64px_-16px_rgba(15,23,42,0.08)] flex flex-col items-center text-center relative z-10"
-        >
-          {/* Custom Beautiful Brand Emblem */}
-          <motion.div 
-            animate={{ 
-              y: [0, -6, 0],
-            }}
-            transition={{ repeat: Infinity, duration: 2.2, ease: "easeInOut" }}
-            className="flex items-center justify-center"
-          >
-            <BrandEmblem />
-          </motion.div>
-          
-          <h2 className="text-2xl font-black text-slate-900 tracking-tight leading-none mt-2">
-            {lang === 'en' ? 'Taxi Tera' : 'ታክሲ ተራ'}
-          </h2>
-          <p className="text-cyan-600 text-[10px] font-black uppercase tracking-widest mt-2 bg-cyan-50 border border-cyan-100/50 px-3 py-1 rounded-full">
-            {lang === 'en' ? 'Smart Transit Assistant' : 'ስማርት ትራንዚት ረዳት'}
-          </p>
-          
-          <p className="text-xs text-slate-500 font-medium leading-relaxed max-w-[260px] mt-4 mb-6">
-            {lang === 'en' 
-              ? 'Addis Ababa local network routes and taxi terminals — always available offline.' 
-              : 'የአዲስ አበባ የአካባቢ መስመሮች እና የታክሲ መቆሚያዎች — ሁልጊዜም ከመስመር ውጭ ዝግጁ።'}
-          </p>
+      <div className="fixed inset-0 z-[9999] bg-[#FFD300] flex flex-col items-center justify-center font-sans select-none overflow-hidden relative">
+        {/* Actual generated Splash Screen Image */}
+        <img 
+          src={splashScreenImg} 
+          alt="Taxi Tera Splash" 
+          className="absolute inset-0 w-full h-full object-cover"
+          referrerPolicy="no-referrer"
+        />
 
-          <div className="flex gap-2 justify-center items-center h-4">
+        {/* Floating Language selector toggle in top-right */}
+        <div className="absolute top-6 right-6 flex items-center gap-2 z-50">
+          <button 
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setLang(l => l === 'en' ? 'am' : 'en');
+            }}
+            className="px-4 py-2 bg-neutral-950/20 backdrop-blur-md shadow-sm rounded-full border border-white/10 font-black text-[10px] text-white hover:bg-neutral-950/30 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
+          >
+            <span>🌐</span>
+            <span>{lang === 'en' ? 'አማርኛ' : 'English'}</span>
+          </button>
+        </div>
+
+        {/* Loading / Timeout indicator at bottom overlay */}
+        <div className="absolute bottom-12 inset-x-0 w-full flex flex-col items-center gap-2 z-20 pointer-events-none">
+          <div className="flex gap-2 justify-center items-center">
             {[0, 1, 2].map(i => (
               <motion.div 
                 key={i}
                 animate={{ 
                   opacity: [0.3, 1, 0.3], 
                   scale: [0.9, 1.25, 0.9],
-                  backgroundColor: ["#94a3b8", "#0891b2", "#94a3b8"]
                 }}
                 transition={{ repeat: Infinity, duration: 1.4, delay: i * 0.18 }}
-                className="w-2 h-2 rounded-full"
+                className="w-2.5 h-2.5 rounded-full bg-neutral-950/60"
               />
             ))}
           </div>
-        </motion.div>
+          <span className="text-[10px] uppercase font-black tracking-widest text-neutral-950/60 drop-shadow-sm font-sans">
+            {lang === 'en' ? 'Loading Offline Maps...' : 'የመስመር ውጭ ካርታዎችን በመጫን ላይ...'}
+          </span>
+        </div>
       </div>
     );
   }
@@ -1027,6 +1214,7 @@ export default function App() {
                   { icon: Bus, label: lang === 'en' ? 'Stations' : 'ጣቢያዎች', id: 'stations' },
                   { icon: Navigation, label: lang === 'en' ? 'Trip Planner' : 'ጉዞ አቅድ', id: 'trips' },
                   { icon: Star, label: lang === 'en' ? 'Favorites' : 'ተወዳጆች', id: 'favs' },
+                  { icon: Heart, label: lang === 'en' ? 'Support Developer' : 'ለአልሚው ድጋፍ ያድርጉ', id: 'support' },
                   { icon: Info, label: lang === 'en' ? 'About App' : 'ስለ መተግበሪያው', id: 'about' }
                 ].map((item) => (
                   <button 
@@ -1039,27 +1227,40 @@ export default function App() {
                       } else if (item.id === 'about') {
                         setIsAboutOpen(true);
                         setIsMenuOpen(false);
+                      } else if (item.id === 'support') {
+                        setIsSupportOpen(true);
+                        setIsMenuOpen(false);
                       } else {
                         setIsMenuOpen(false);
                       }
                     }}
                     className="flex items-center gap-4 p-4 rounded-xl hover:bg-slate-50 transition-colors group"
                   >
-                    <item.icon className="w-5 h-5 text-slate-400 group-hover:text-primary transition-colors" />
-                    <span className="font-bold text-slate-700">{item.label}</span>
+                    <item.icon className={cn(
+                      "w-5 h-5 transition-colors",
+                      item.id === 'support' 
+                        ? "text-rose-500 group-hover:text-rose-600" 
+                        : "text-slate-400 group-hover:text-primary"
+                    )} />
+                    <span className={cn(
+                      "font-bold transition-colors",
+                      item.id === 'support' 
+                        ? "text-rose-600 group-hover:text-rose-700" 
+                        : "text-slate-700"
+                    )}>{item.label}</span>
                   </button>
                 ))}
               </div>
 
               <div className="mt-auto pt-6 border-t border-slate-100">
                 <div className="flex items-center gap-4 mb-4">
-                  <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
-                    AM
+                  <div className="w-10 h-10 rounded-full bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-500 text-lg font-bold">
+                    💖
                   </div>
                   <div>
-                    <div className="font-bold text-slate-800">Taxi Tera</div>
-                    <div className="text-[10px] text-primary font-black uppercase tracking-wider mb-0.5">Developed by Tejo Interactives</div>
-                    <div className="text-[10px] text-slate-400">v1.0.2 Beta Build</div>
+                    <div className="font-black text-slate-800 tracking-tight text-sm">Taxi Tera</div>
+                    <div className="text-[10px] text-primary font-black uppercase tracking-wider mb-0.5">Developed by Abenezer</div>
+                    <div className="text-[8px] text-slate-400 font-mono">v1.0.3 Live Update</div>
                   </div>
                 </div>
                 <button 
@@ -1223,6 +1424,52 @@ export default function App() {
                   {lang === 'en' ? 'Save Changes' : 'ለውጦችን አስቀምጥ'}
                 </button>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Support Developer Modal */}
+      <AnimatePresence>
+        {isSupportOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[12000] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto"
+          >
+            <motion.div 
+              initial={{ scale: 0.94, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.94, y: 20 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 280 }}
+              className="w-full max-w-[340px] bg-slate-900/40 rounded-[32px] shadow-2xl border border-white/10 flex flex-col relative overflow-hidden select-none p-1.5 pb-4 border-t border-white/20"
+            >
+              {/* The exact Telebirr payment card image */}
+              <div className="w-full rounded-[26px] overflow-hidden bg-white shadow-lg relative aspect-[9/16] max-h-[580px]">
+                <img 
+                  src={donationQrImg} 
+                  alt="Telebirr Payment Card" 
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
+                
+                {/* Close button inside the image card overlay */}
+                <button 
+                  onClick={() => setIsSupportOpen(false)}
+                  className="absolute top-4 right-4 p-2.5 bg-black/45 hover:bg-black/65 active:scale-95 text-white rounded-full transition-all duration-200 cursor-pointer focus:outline-none z-30 flex items-center justify-center border border-white/15 backdrop-blur-md shadow-md"
+                  title={lang === 'en' ? 'Close' : 'ዝጋ'}
+                >
+                  <X className="w-4 h-4 stroke-[2.5]" />
+                </button>
+              </div>
+              
+              {/* Minimalist instruction text under the card */}
+              <p className="text-[11px] text-white/95 text-center px-4 mt-3 leading-relaxed font-semibold">
+                {lang === 'en' 
+                  ? 'Scan the Telebirr QR from your Telebirr app to support the developer.' 
+                  : 'ለመደገፍ ይህንን የቴሌብር QR ኮድ በቴሌብር መተግበሪያዎ ይቃኙ።'}
+              </p>
             </motion.div>
           </motion.div>
         )}
