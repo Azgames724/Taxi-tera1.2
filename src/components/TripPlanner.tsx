@@ -436,7 +436,6 @@ export default function TripPlanner({ lang, onPathSelect, userLocation, initialO
           results.map((path, idx) => (
             <motion.div 
               key={`path-${idx}-${path.legs.map(l => l.from).join('-')}`}
-              layout
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               onClick={() => {

@@ -13,10 +13,11 @@ import {
   Info,
   Map as MapIcon,
   Route as RouteIcon,
-  Heart
+  Heart,
+  MessageSquare
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import Map from './components/Map';
+import Map, { StationReport } from './components/Map';
 import TripPlanner from './components/TripPlanner';
 import { 
   STATIONS,
@@ -49,6 +50,22 @@ function isInsideAddis(lat: number, lng: number): boolean {
     lng >= ADDIS_BOUNDS.minLng &&
     lng <= ADDIS_BOUNDS.maxLng
   );
+}
+
+function formatReportTime(timestamp: number, lang: 'en' | 'am'): string {
+  const diff = Date.now() - timestamp;
+  if (diff < 60000) {
+    return lang === 'en' ? 'Just now' : 'አሁን';
+  }
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) {
+    return lang === 'en' ? `${mins}m ago` : `ከ${mins} ደቂቃ በፊት`;
+  }
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) {
+    return lang === 'en' ? `${hours}h ago` : `ከ${hours} ሰዓት በፊት`;
+  }
+  return new Date(timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
 const TaxiMapPin = () => (
@@ -274,13 +291,13 @@ export default function App() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsSplash(false);
-    }, 2800);
+    }, 1200);
     return () => clearTimeout(timer);
   }, []);
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'stations' | 'trips'>('trips');
+  const [activeTab, setActiveTab] = useState<'stations' | 'trips' | 'messages'>('trips');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStation, setSelectedStation] = useState<Station | null>(null);
   const [activePath, setActivePath] = useState<TripPath | null>(null);
@@ -316,6 +333,13 @@ export default function App() {
     return !navigator.onLine;
   });
 
+  const panelY = useMemo(() => {
+    if (selectedStation) return '100%';
+    if (panelHeight === 'full') return '0%';
+    if (panelHeight === 'expanded') return '32vh';
+    return 'calc(92vh - 135px)';
+  }, [panelHeight, selectedStation]);
+
   const toggleOffline = useCallback(() => {
     setIsOffline(prev => {
       const next = !prev;
@@ -325,6 +349,60 @@ export default function App() {
   }, []);
 
   const [showFavsOnly, setShowFavsOnly] = useState(false);
+
+  // Community reports for busy stations and pinned minibuses
+  const [reports, setReports] = useState<StationReport[]>(() => {
+    const saved = localStorage.getItem('ttReports');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as StationReport[];
+        // Filter out reports older than 5 hours (5hr * 60 * 60 * 1000 MS = 18000000)
+        // Also discard any previous placeholder seeds (IDs starting with 'rep-1', 'rep-2', etc.)
+        const fiveHoursAgo = Date.now() - 18000000;
+        return parsed.filter(report => 
+          report.timestamp > fiveHoursAgo && 
+          report.id.startsWith('rep-custom-')
+        );
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return [];
+  });
+
+  const [focusedReport, setFocusedReport] = useState<StationReport | null>(null);
+  const [isPostingReport, setIsPostingReport] = useState(false);
+  const [newReportStation, setNewReportStation] = useState<string>('Megenagna Minibus Hub');
+  const [newReportType, setNewReportType] = useState<'busy' | 'info' | 'minibus'>('busy');
+  const [newReportStatus, setNewReportStatus] = useState<'critical' | 'moderate' | 'free' | 'info' | 'pinned'>('critical');
+  const [newReportText, setNewReportText] = useState('');
+
+  // Persist reports
+  useEffect(() => {
+    localStorage.setItem('ttReports', JSON.stringify(reports));
+  }, [reports]);
+
+  // Periodic Cleanup: Auto-delete reports older than 5 hours
+  useEffect(() => {
+    const checkAndPrune = () => {
+      const fiveHoursAgo = Date.now() - 18000000;
+      setReports(prev => {
+        const active = prev.filter(report => report.timestamp > fiveHoursAgo);
+        if (active.length !== prev.length) {
+          // Hide focus view if the currently focused report got pruned
+          if (focusedReport && !active.some(r => r.id === focusedReport.id)) {
+            setFocusedReport(null);
+          }
+          return active;
+        }
+        return prev;
+      });
+    };
+
+    checkAndPrune();
+    const interval = setInterval(checkAndPrune, 30000); // Check every 30 seconds
+    return () => clearInterval(interval);
+  }, [focusedReport]);
 
   // User details states for onboarding and customization
   const [userName, setUserName] = useState<string>(() => {
@@ -436,8 +514,8 @@ export default function App() {
           name: s,
           am: s,
           t: 'minibus',
-          lat: pos ? pos[0] : mapCenter[0],
-          lng: pos ? pos[1] : mapCenter[1],
+          lat: pos ? pos[0] : 9.0222,
+          lng: pos ? pos[1] : 38.7469,
           addr: 'Mobile Transport Hub',
           addrAm: 'ተንቀሳቃሽ የመጓጓዣ መገናኛ',
           r: destinations.length > 0 ? Array.from(new Set(destinations)) : ['Check Local Board'],
@@ -455,7 +533,49 @@ export default function App() {
     // Don't fully hide, just collapse
     setPanelOpen(false);
     setPanelHeight('collapsed');
-  }, [mapCenter]);
+  }, []);
+
+  const handleReportClick = useCallback((r: StationReport) => {
+    setFocusedReport(r);
+    setMapCenter(r.location);
+    setMapZoom(16);
+    setPanelHeight('collapsed');
+  }, []);
+
+  const handlePostReport = () => {
+    const textToUse = newReportText.trim() || (
+      newReportType === 'busy' 
+        ? (lang === 'en' ? 'Station is crowded right now.' : 'ጣቢያው አሁን ላይ ተጨናንቋል።') 
+        : newReportType === 'minibus' 
+          ? (lang === 'en' ? 'Taxi pinned here.' : 'ታክሲ እዚህ ተለጥፏል።') 
+          : (lang === 'en' ? 'Active station update.' : 'የጣቢያ መረጃ።')
+    );
+    const stationCoords = COORDS[newReportStation] || [9.0272, 38.7678];
+    const userAvatarObj = AVATARS.find(a => a.id === userAvatarId) || AVATARS[0];
+    
+    const newReport: StationReport = {
+      id: `rep-custom-${Date.now()}`,
+      stationName: newReportStation,
+      type: newReportType,
+      status: newReportStatus,
+      userName: userName.trim() || (lang === 'en' ? 'Addis Rider' : 'አዲስ ተሳፋሪ'),
+      userAvatar: userAvatarObj.emoji,
+      userBg: userAvatarObj.bg,
+      text: textToUse,
+      timestamp: Date.now(),
+      location: stationCoords
+    };
+
+    setReports(prev => [newReport, ...prev]);
+    setIsPostingReport(false);
+    setNewReportText('');
+    
+    // Auto focus the new post they just created on the map immediately
+    setFocusedReport(newReport);
+    setMapCenter(stationCoords);
+    setMapZoom(16);
+    setPanelHeight('collapsed');
+  };
 
   const handleLocateMe = useCallback(() => {
     if (userLocation && isInsideAddis(userLocation[0], userLocation[1])) {
@@ -494,6 +614,11 @@ export default function App() {
         setMapZoom(15);
       }
     }
+  }, []);
+
+  const handlePlannerLocationChange = useCallback((orig: string, dest: string) => {
+    setPlannerOrigin(orig);
+    setPlannerDestination(dest);
   }, []);
 
   if (isSplash) {
@@ -777,7 +902,69 @@ export default function App() {
           isOffline={isOffline}
           plannerStart={plannerStartCoords}
           plannerEnd={plannerEndCoords}
+          reports={reports}
+          onReportClick={handleReportClick}
         />
+
+        {/* Floating Focused Report Dialog Overlay */}
+        <AnimatePresence>
+          {focusedReport && (
+            <motion.div
+              initial={{ opacity: 0, y: -20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.95 }}
+              className="absolute top-[125px] inset-x-4 z-40 bg-slate-900/95 backdrop-blur-md rounded-2xl border border-white/10 shadow-[0_12px_44px_rgba(0,0,0,0.35)] p-4 text-white flex flex-col gap-3 font-sans"
+            >
+              <button 
+                onClick={() => setFocusedReport(null)}
+                className="absolute top-3.5 right-3.5 p-1.5 bg-white/10 hover:bg-white/20 active:scale-90 text-white rounded-full transition-all cursor-pointer border border-white/5"
+                title={lang === 'en' ? 'Close Focus' : 'ትኩረት ዝጋ'}
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                  {focusedReport.type === 'busy' 
+                    ? (lang === 'en' ? 'Crowd Alert' : 'የሰልፍ ጥቆማ') 
+                    : focusedReport.type === 'minibus' 
+                      ? (lang === 'en' ? 'Taxi Pinned' : 'ታክሲ ተለጥፏል') 
+                      : (lang === 'en' ? 'Station Info' : 'የጣቢያ መረጃ')}
+                </span>
+                <span className="text-[9px] text-white/55 font-bold font-mono">
+                  {formatReportTime(focusedReport.timestamp, lang)}
+                </span>
+              </div>
+
+              <div>
+                <h4 className="text-sm font-black tracking-tight flex items-center gap-1.5 text-yellow-400">
+                  <span>📍</span>
+                  <span>{focusedReport.stationName}</span>
+                </h4>
+                <p className="text-xs text-white/90 mt-1.5 leading-relaxed font-semibold">
+                  "{focusedReport.text}"
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between border-t border-white/5 pt-2.5 mt-0.5 text-[10px]">
+                <div className="flex items-center gap-1.5">
+                  <div className={cn("w-5.5 h-5.5 rounded-full flex items-center justify-center text-xs bg-gradient-to-tr shadow-sm", focusedReport.userBg)}>
+                    {focusedReport.userAvatar}
+                  </div>
+                  <span className="text-white/60 font-black">{focusedReport.userName}</span>
+                </div>
+                
+                <button
+                  type="button"
+                  onClick={() => setFocusedReport(null)}
+                  className="px-3 py-1 bg-[#FFD300] hover:bg-[#FED100] text-slate-950 font-black text-[9px] uppercase tracking-wider rounded-lg transition-transform active:scale-95 cursor-pointer border-none"
+                >
+                  {lang === 'en' ? 'Dismiss Blur' : 'ትኩረቱን አንሳ'}
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Premium Gradient Fades - transitioning cleanly from background color to map */}
         <div className="absolute top-0 inset-x-0 h-28 bg-gradient-to-b from-slate-50 via-slate-50/40 to-transparent pointer-events-none z-10" />
@@ -798,10 +985,10 @@ export default function App() {
       <motion.div 
         initial={false}
         animate={{ 
-          y: selectedStation ? '100%' : 0,
-          height: panelHeight === 'expanded' ? '60vh' : panelHeight === 'full' ? '92vh' : '135px'
+          y: panelY
         }}
-        transition={{ type: 'spring', damping: 30, stiffness: 300, mass: 0.8 }}
+        style={{ height: '92vh' }}
+        transition={{ type: 'tween', ease: [0.215, 0.61, 0.355, 1], duration: 0.32 }}
         drag={selectedStation ? false : "y"}
         dragConstraints={{ top: 0, bottom: 0 }}
         dragElastic={0.05}
@@ -844,6 +1031,64 @@ export default function App() {
           }}
         >
           <div className="w-10 h-1 bg-slate-200 rounded-full" />
+        </div>
+
+        {/* Custom Segment Tab Selector */}
+        <div className="px-4 pb-2.5 shrink-0">
+          <div className="p-0.5 bg-slate-100/90 rounded-2xl flex items-center font-sans border border-slate-200/20 shadow-[inset_0_1px_3px_rgba(0,0,0,0.02)]">
+            <button
+              onClick={() => {
+                setActiveTab('trips');
+                setPanelHeight('expanded');
+                setPanelOpen(true);
+              }}
+              className={cn(
+                "flex-1 py-1.5 rounded-xl text-[11px] font-black tracking-tight transition-all cursor-pointer flex items-center justify-center gap-1.5",
+                activeTab === 'trips' 
+                  ? "bg-white text-slate-800 shadow-[0_2.5px_8px_rgba(15,23,42,0.06)]" 
+                  : "text-slate-400 hover:text-slate-600"
+              )}
+            >
+              <span>🗺️</span>
+              <span>{lang === 'en' ? 'Planner' : 'አቅጣጫ'}</span>
+            </button>
+            
+            <button
+              onClick={() => {
+                setActiveTab('stations');
+                setShowFavsOnly(false);
+                setPanelHeight('expanded');
+                setPanelOpen(true);
+              }}
+              className={cn(
+                "flex-1 py-1.5 rounded-xl text-[11px] font-black tracking-tight transition-all cursor-pointer flex items-center justify-center gap-1.5",
+                (activeTab === 'stations' && !showFavsOnly)
+                  ? "bg-white text-slate-800 shadow-[0_2.5px_8px_rgba(15,23,42,0.06)]" 
+                  : "text-slate-400 hover:text-slate-600"
+              )}
+            >
+              <span>🚌</span>
+              <span>{lang === 'en' ? 'Stations' : 'ጣቢያዎች'}</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveTab('messages');
+                setPanelHeight('expanded');
+                setPanelOpen(true);
+              }}
+              className={cn(
+                "flex-1 py-1.5 rounded-xl text-[11px] font-black tracking-tight transition-all cursor-pointer relative flex items-center justify-center gap-1.5",
+                activeTab === 'messages'
+                  ? "bg-white text-slate-800 shadow-[0_2.5px_8px_rgba(15,23,42,0.06)]" 
+                  : "text-slate-400 hover:text-slate-600"
+              )}
+            >
+              <span>💬</span>
+              <span>{lang === 'en' ? 'Updates' : 'ሪፖርቶች'}</span>
+              <span className="absolute top-1.5 right-2 w-1.5 h-1.5 bg-rose-500 rounded-full" />
+            </button>
+          </div>
         </div>
 
         {/* Search places, areas... inside the bottom-sheet directly, mirroring exactly screen reference */}
@@ -964,7 +1209,7 @@ export default function App() {
                   ))}
                 </div>
               </motion.div>
-            ) : (
+            ) : activeTab === 'trips' ? (
               <motion.div 
                 key="trips"
                 initial={{ opacity: 0 }}
@@ -978,11 +1223,314 @@ export default function App() {
                   initialOrigin={plannerInitialState.origin}
                   initialDestination={plannerInitialState.dest}
                   onPathSelect={handlePathSelect} 
-                  onLocationChange={(orig, dest) => {
-                    setPlannerOrigin(orig);
-                    setPlannerDestination(dest);
-                  }}
+                  onLocationChange={handlePlannerLocationChange}
                 />
+              </motion.div>
+            ) : (
+              <motion.div 
+                key="messages"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                transition={{ duration: 0.2 }}
+                className="flex flex-col gap-4 font-sans"
+              >
+                {/* Header card with action */}
+                <div className="bg-gradient-to-tr from-slate-900 via-slate-800 to-indigo-950 text-white rounded-2xl p-4 shadow-md border border-white/10 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-400/10 rounded-full blur-2xl pointer-events-none" />
+                  
+                  <h3 className="text-sm font-black uppercase tracking-wider text-yellow-400">
+                    {lang === 'en' ? '👥 Addis Crowdsource' : '👥 የአዲስ ክራውድሶርስ'}
+                  </h3>
+                  <p className="text-xs text-white/80 mt-1 font-semibold leading-relaxed">
+                    {lang === 'en' 
+                      ? 'Stay updated with real-time station statuses, taxi passenger queues, and minibus availability reported by riders.' 
+                      : 'በተሳፋሪዎች የተዘገቡ ፈጣን የጣቢያ መጨናነቅ፣ የሰልፍ ርዝመት እና የታክሲ መረጃዎችን እዚህ ያግኙ።'}
+                  </p>
+                  
+                  {!isPostingReport && (
+                    <button
+                      onClick={() => setIsPostingReport(true)}
+                      className="mt-4 w-full py-3 bg-[#FFD300] hover:bg-[#FED100] active:scale-[0.99] text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-[0_4px_12px_rgba(254,209,0,0.25)] flex items-center justify-center gap-2 cursor-pointer border-none"
+                    >
+                      <span>📢</span>
+                      <span>{lang === 'en' ? 'Report Crowd or Taxi Info' : 'የሚጨናነቅ ጣቢያ ወይም ታክሲ ጠቁም'}</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Submit Report Form Card (Expandable inline) */}
+                <AnimatePresence>
+                  {isPostingReport && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="bg-slate-50 border border-slate-200/60 rounded-2xl p-4 overflow-hidden flex flex-col gap-3"
+                    >
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-black uppercase text-slate-800 tracking-wider">
+                          {lang === 'en' ? 'Create New Update' : 'አዲስ መረጃ ይጻፉ'}
+                        </h4>
+                        <button 
+                          onClick={() => setIsPostingReport(false)}
+                          className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Select Station dropdown */}
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          {lang === 'en' ? 'Select Station' : 'ጣቢያ ይምረጡ'}
+                        </label>
+                        <select
+                          value={newReportStation}
+                          onChange={(e) => setNewReportStation(e.target.value)}
+                          className="w-full bg-white border border-slate-200 text-xs font-bold text-slate-800 rounded-xl p-2.5 outline-none focus:border-slate-800 transition-colors"
+                        >
+                          {STATIONS.map((st) => (
+                            <option key={`st-sel-${st.id}`} value={st.name}>
+                              {lang === 'am' ? st.am : st.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Select Type Grid */}
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          {lang === 'en' ? 'Update Category' : 'የመረጃው አይነት'}
+                        </label>
+                        <div className="grid grid-cols-3 gap-1.5 mt-0.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNewReportType('busy');
+                              setNewReportStatus('critical');
+                            }}
+                            className={cn(
+                              "py-2 px-1 text-[10px] font-black uppercase tracking-tight rounded-xl transition-all cursor-pointer border flex flex-col items-center justify-center gap-1",
+                              newReportType === 'busy'
+                                ? "bg-red-50 border-red-200 text-red-600 shadow-sm"
+                                : "bg-white border-slate-100 text-slate-400 hover:text-slate-600"
+                            )}
+                          >
+                            <span className="text-sm">🔥</span>
+                            <span>{lang === 'en' ? 'Busy Station' : 'የተጨናነቀ'}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNewReportType('minibus');
+                              setNewReportStatus('pinned');
+                            }}
+                            className={cn(
+                              "py-2 px-1 text-[10px] font-black uppercase tracking-tight rounded-xl transition-all cursor-pointer border flex flex-col items-center justify-center gap-1",
+                              newReportType === 'minibus'
+                                ? "bg-cyan-50 border-cyan-200 text-cyan-600 shadow-sm"
+                                : "bg-white border-slate-100 text-slate-400 hover:text-slate-600"
+                            )}
+                          >
+                            <span className="text-sm">🚌</span>
+                            <span>{lang === 'en' ? 'Pin Minibus' : 'ታክሲ አለ'}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNewReportType('info');
+                              setNewReportStatus('info');
+                            }}
+                            className={cn(
+                              "py-2 px-1 text-[10px] font-black uppercase tracking-tight rounded-xl transition-all cursor-pointer border flex flex-col items-center justify-center gap-1",
+                              newReportType === 'info'
+                                ? "bg-amber-50 border-amber-200 text-amber-600 shadow-sm"
+                                : "bg-white border-slate-100 text-slate-400 hover:text-slate-600"
+                            )}
+                          >
+                            <span className="text-sm">ℹ️</span>
+                            <span>{lang === 'en' ? 'General Info' : 'መረጃ'}</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Text Description Box */}
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          {lang === 'en' ? 'Details text' : 'ዝርዝር ማብራሪያ'}
+                        </label>
+                        <textarea
+                          rows={2.5}
+                          value={newReportText}
+                          onChange={(e) => setNewReportText(e.target.value)}
+                          placeholder={
+                            newReportType === 'busy'
+                              ? (lang === 'en' ? 'e.g., The Stadium queue for Bole is 40 people long right now.' : 'ምሳሌ፡ የቦሌ ታክሲ ሰልፍ ስታዲየም ላይ 40 ሰው ይደርሳል።')
+                              : newReportType === 'minibus'
+                                ? (lang === 'en' ? 'e.g., 3 empty minibuses just parked ready for passengers.' : 'ምሳሌ፡ 3 ባዶ ታክሲዎች አሁን ተሰልፈዋል።')
+                                : (lang === 'en' ? 'e.g., Fares are regular today, road is clear.' : 'ምሳሌ፡ ዛሬ ዋጋው መደበኛ ነው፣ መንገዱም ንጹህ ነው።')
+                          }
+                          className="w-full bg-white border border-slate-200 text-xs font-semibold text-slate-800 rounded-xl p-2.5 outline-none focus:border-slate-800 transition-colors placeholder:text-slate-400 leading-normal"
+                          maxLength={150}
+                        />
+                      </div>
+
+                      {/* Form action triggers */}
+                      <div className="flex items-center gap-2 mt-1">
+                        <button
+                          type="button"
+                          onClick={() => handlePostReport()}
+                          className="flex-1 py-3 bg-slate-950 hover:bg-slate-800 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md cursor-pointer border-none"
+                        >
+                          {lang === 'en' ? 'Post Update' : 'መረጃውን ልቀቅ'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsPostingReport(false)}
+                          className="py-3 px-4 bg-slate-200 text-slate-600 font-extrabold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer border-none"
+                        >
+                          {lang === 'en' ? 'Cancel' : 'ስርዝ'}
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* List of active crowd reports */}
+                <div className="flex flex-col gap-2.5 mt-1">
+                  <div className="flex items-center justify-between px-1">
+                    <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                      {lang === 'en' ? 'Live Community Activity Feed' : 'የአካባቢው ተሳፋሪዎች መረጃ ረድፍ'}
+                    </h4>
+                    <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100">
+                      {reports.length} {lang === 'en' ? 'active' : 'ወቅታዊ መረጃ'}
+                    </span>
+                  </div>
+
+                  {reports.map((report) => {
+                    return (
+                      <motion.div 
+                        key={`report-item-${report.id}`}
+                        layoutId={`report-card-${report.id}`}
+                        initial={{ opacity: 0, scale: 0.98 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className={cn(
+                          "bg-white rounded-2xl border p-3 flex flex-col gap-2.5 transition-all relative group shadow-[0_2px_12px_rgba(15,23,42,0.015)] hover:shadow-[0_4px_20px_rgba(15,23,42,0.04)]",
+                          report.type === 'busy' 
+                            ? "border-red-100/70 hover:border-red-200/70" 
+                            : report.type === 'minibus' 
+                              ? "border-cyan-100/70 hover:border-cyan-200/70" 
+                              : "border-slate-100 hover:border-slate-200"
+                        )}
+                      >
+                        {/* Header metadata row */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-xs bg-gradient-to-tr", report.userBg)}>
+                              {report.userAvatar}
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-[10px] font-bold text-slate-800 leading-tight">
+                                {report.userName}
+                              </span>
+                              <span className="text-[8px] text-slate-400 font-bold leading-none font-mono mt-0.5">
+                                {formatReportTime(report.timestamp, lang)}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            <span className={cn(
+                              "px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider border",
+                              report.type === 'busy' 
+                                ? "bg-red-50 border-red-100 text-red-600" 
+                                : report.type === 'minibus' 
+                                  ? "bg-cyan-50 border-cyan-100 text-cyan-600" 
+                                  : "bg-amber-50 border-amber-100 text-amber-600"
+                            )}>
+                              {report.type === 'busy' 
+                                ? (lang === 'en' ? '🔥 Busy Queue' : '🔥 በከፍተኛ ሰልፍ') 
+                                : report.type === 'minibus' 
+                                  ? (lang === 'en' ? '🚌 Minibus' : '🚌 ታክሲ የሚገኝበት') 
+                                  : (lang === 'en' ? 'ℹ️ Info' : 'ℹ️ ጣቢያ መረጃ')}
+                            </span>
+                            
+                            {/* Dismiss button */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setReports(prev => prev.filter(r => r.id !== report.id));
+                                if (focusedReport?.id === report.id) {
+                                  setFocusedReport(null);
+                                }
+                              }}
+                              className="p-1 text-slate-300 hover:text-slate-500 rounded-full hover:bg-slate-50 transition-colors"
+                              title={lang === 'en' ? 'Close Report' : 'ሪፖርት አጥፋ'}
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Station and Description text */}
+                        <div 
+                          onClick={() => {
+                            setFocusedReport(report);
+                            setMapCenter(report.location);
+                            setMapZoom(16);
+                            setPanelHeight('collapsed');
+                          }}
+                          className="cursor-pointer"
+                        >
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs">📍</span>
+                            <span className="text-xs font-black text-slate-800 hover:text-slate-950 underline decoration-slate-300 decoration-1">
+                              {report.stationName}
+                            </span>
+                          </div>
+                          
+                          <p className="text-xs font-bold text-slate-600 mt-1 pl-4 leading-relaxed italic">
+                            "{report.text}"
+                          </p>
+                        </div>
+
+                        {/* Quick View-on-Map helper panel */}
+                        <div className="flex items-center justify-end border-t border-slate-50 pt-2 shrink-0">
+                          <button
+                            onClick={() => {
+                              setFocusedReport(report);
+                              setMapCenter(report.location);
+                              setMapZoom(16);
+                              setPanelHeight('collapsed');
+                            }}
+                            className="bg-slate-50 hover:bg-[#FFD300]/10 border border-slate-100 hover:border-[#FFD300]/40 rounded-lg px-2.5 py-1 text-[9px] font-black text-slate-700 hover:text-slate-900 flex items-center gap-1 cursor-pointer transition-colors"
+                          >
+                            <span>🗺️</span>
+                            <span>{lang === 'en' ? 'Show on Map' : 'ካርታ ላይ አሳይ'}</span>
+                            <span className="text-[10px] leading-none">→</span>
+                          </button>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+
+                  {reports.length === 0 && (
+                    <div className="text-center py-12 bg-white rounded-2xl border border-slate-100 p-6 flex flex-col items-center gap-2">
+                      <div className="text-3xl">📭</div>
+                      <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest mt-1">
+                        {lang === 'en' ? 'No reports currently' : 'ምንም ወቅታዊ መረጃ የለም'}
+                      </h4>
+                      <p className="text-[11px] text-slate-400 font-bold max-w-xs mt-0.5">
+                        {lang === 'en' 
+                          ? 'Everything is clean right now. Click on "Report Crowd" to submit any updates you notice.' 
+                          : 'ሁሉም ቦታ ንጹህ ይመስላል። ያስተዋሉትን ማንኛውንም መረጃ ለማጋራት "ይጨናነቃል" የሚለውን ይጫኑ።'}
+                      </p>
+                    </div>
+                  )}
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -1004,7 +1552,7 @@ export default function App() {
               initial={{ y: '100%' }}
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
-              transition={{ type: "spring", damping: 32, stiffness: 320, mass: 0.95 }}
+              transition={{ type: 'tween', ease: [0.215, 0.61, 0.355, 1], duration: 0.32 }}
               drag="y"
               dragConstraints={{ top: 0 }}
               dragElastic={0.1}
@@ -1189,7 +1737,7 @@ export default function App() {
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
-              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              transition={{ type: 'tween', ease: [0.215, 0.61, 0.355, 1], duration: 0.28 }}
               className="fixed inset-y-0 left-0 w-80 bg-white z-[9999] shadow-2xl flex flex-col p-6"
             >
               <div className="flex items-center justify-between mb-8">
@@ -1440,7 +1988,7 @@ export default function App() {
               initial={{ scale: 0.94, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.94, y: 20 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 280 }}
+              transition={{ type: 'tween', ease: [0.34, 1.56, 0.64, 1], duration: 0.38 }}
               className="w-full max-w-[340px] bg-slate-900/40 rounded-[32px] shadow-2xl border border-white/10 flex flex-col relative overflow-hidden select-none p-1.5 pb-4 border-t border-white/20"
             >
               {/* The exact Telebirr payment card image */}

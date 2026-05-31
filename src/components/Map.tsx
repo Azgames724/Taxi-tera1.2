@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useEffect, useMemo, Fragment, memo, useRef, useState } from 'react';
+import { useEffect, useMemo, Fragment, memo, useRef, useState, useCallback } from 'react';
 import { MapContainer, TileLayer, Marker, useMap, Polyline, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -22,6 +22,19 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
+export interface StationReport {
+  id: string;
+  stationName: string;
+  type: 'busy' | 'info' | 'minibus';
+  status: 'critical' | 'moderate' | 'free' | 'info' | 'pinned';
+  userName: string;
+  userAvatar: string;
+  userBg: string;
+  text: string;
+  timestamp: number;
+  location: [number, number];
+}
+
 interface MapProps {
   center: [number, number];
   zoom: number;
@@ -34,6 +47,8 @@ interface MapProps {
   isOffline?: boolean;
   plannerStart?: [number, number] | null;
   plannerEnd?: [number, number] | null;
+  reports?: StationReport[];
+  onReportClick?: (report: StationReport) => void;
 }
 
 function MapUpdater({ center, zoom, activePath, panelOpen, plannerStart, plannerEnd }: { center: [number, number], zoom: number, activePath: any, panelOpen: boolean, plannerStart?: [number, number] | null; plannerEnd?: [number, number] | null }) {
@@ -41,6 +56,10 @@ function MapUpdater({ center, zoom, activePath, panelOpen, plannerStart, planner
   const lastCenter = useRef<[number, number]>(center);
   const lastZoom = useRef<number>(zoom);
   const isMoving = useRef(false);
+
+  const lastActivePathSig = useRef<string | null>(null);
+  const lastPlannerStartSig = useRef<string | null>(null);
+  const lastPlannerEndSig = useRef<string | null>(null);
   
   useEffect(() => {
     map.on('movestart', () => { isMoving.current = true; });
@@ -57,32 +76,49 @@ function MapUpdater({ center, zoom, activePath, panelOpen, plannerStart, planner
   }, [map, panelOpen]);
 
   useEffect(() => {
-    if (isMoving.current) return;
+    const hasCenterChanged = lastCenter.current[0] !== center[0] || lastCenter.current[1] !== center[1];
+    const hasZoomChanged = lastZoom.current !== zoom;
 
-    const currentCenter = map.getCenter();
-    const currentZoom = map.getZoom();
+    if (hasCenterChanged || hasZoomChanged) {
+      const currentCenter = map.getCenter();
+      const currentZoom = map.getZoom();
 
-    const latDiff = Math.abs(currentCenter.lat - center[0]);
-    const lngDiff = Math.abs(currentCenter.lng - center[1]);
-    
-    // Ignore micro-jitter to save CPU and reduce lag
-    if (latDiff < 0.0005 && lngDiff < 0.0005 && Math.abs(currentZoom - zoom) < 0.1) return;
+      const latDiff = Math.abs(currentCenter.lat - center[0]);
+      const lngDiff = Math.abs(currentCenter.lng - center[1]);
+      
+      // Ignore micro-jitter to save CPU and reduce lag
+      if (latDiff < 0.0001 && lngDiff < 0.0001 && Math.abs(currentZoom - zoom) < 0.05) return;
 
-    // Use setView for most updates instead of flyTo which is heavier
-    // FlyTo only for big jumps
-    const isBigJump = latDiff > 0.02 || lngDiff > 0.02;
+      const isBigJump = latDiff > 0.02 || lngDiff > 0.02;
 
-    if (isBigJump) {
-      map.flyTo(center, zoom, { duration: 1 });
-    } else {
-      map.panTo(center, { animate: true, duration: 0.5 });
+      if (isBigJump) {
+        map.flyTo(center, zoom, { duration: 0.8 });
+      } else {
+        map.panTo(center, { animate: true, duration: 0.4 });
+      }
+      
+      lastCenter.current = center;
+      lastZoom.current = zoom;
     }
-    
-    lastCenter.current = center;
-    lastZoom.current = zoom;
   }, [center, zoom, map]);
 
   useEffect(() => {
+    const pathSig = activePath ? activePath.legs.map((l: any) => `${l.from}-${l.to}`).join('|') : 'null';
+    const startSig = plannerStart ? `${plannerStart[0].toFixed(5)},${plannerStart[1].toFixed(5)}` : 'null';
+    const endSig = plannerEnd ? `${plannerEnd[0].toFixed(5)},${plannerEnd[1].toFixed(5)}` : 'null';
+
+    const hasPathChanged = lastActivePathSig.current !== pathSig;
+    const hasStartChanged = lastPlannerStartSig.current !== startSig;
+    const hasEndChanged = lastPlannerEndSig.current !== endSig;
+
+    if (!hasPathChanged && !hasStartChanged && !hasEndChanged) {
+      return;
+    }
+
+    lastActivePathSig.current = pathSig;
+    lastPlannerStartSig.current = startSig;
+    lastPlannerEndSig.current = endSig;
+
     if (activePath && activePath.legs.length > 0) {
       const coords: [number, number][] = [];
       activePath.legs.forEach((leg: any) => {
@@ -136,68 +172,130 @@ const userIcon = L.divIcon({
   iconAnchor: [24, 24]
 });
 
-const minibusIcon = (showIcon?: boolean, count?: number) => L.divIcon({
-  html: `
-    <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 64px; height: 64px;">
-      <!-- iOS style custom translucent coverage range halo matching screenshot exactly -->
-      <div style="position: absolute; width: 52px; height: 52px; border-radius: 50%; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.25);"></div>
-      <div style="position: absolute; width: 28px; height: 28px; border-radius: 50%; background: rgba(56, 189, 248, 0.1); filter: blur(3px);"></div>
-      
-      <!-- Sleek high-contrast black marker node -->
-      <div style="position: absolute; width: 28px; height: 28px; border-radius: 50%; background: #0f172a; border: 2px solid white; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(0,0,0,0.2); transition: transform 0.2s ease;">
-        <span style="font-size: ${showIcon ? '11px' : '9px'}; font-weight: 900; color: white; font-family: system-ui, -apple-system, sans-serif;">
-          ${showIcon ? '🚌' : (count || 3)}
-        </span>
-      </div>
-    </div>
-  `,
-  className: '',
-  iconSize: [64, 64],
-  iconAnchor: [32, 32]
-});
+const minibusIconCache: Record<string, L.DivIcon> = {};
+const minibusIcon = (showIcon?: boolean, count?: number) => {
+  const cacheKey = `${showIcon}_${count || 3}`;
+  if (minibusIconCache[cacheKey]) return minibusIconCache[cacheKey];
 
-const routeIcon = (isStart?: boolean) => L.divIcon({
-  html: `
-    <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 48px; height: 48px;">
-      <!-- High contrast travel nodes with subtle micro bounce -->
-      <div style="position: absolute; width: 34px; height: 34px; border-radius: 50%; background: rgba(245, 158, 11, 0.15); filter: blur(2px);"></div>
-      <div style="background: ${isStart ? '#0891B2' : '#F59E0B'}; width: 26px; height: 26px; border-radius: 50%; border: 2.5px solid white; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(0,0,0,0.25); animation: bounce 1.2s infinite alternate;">
-        <span style="font-size: 11px;">${isStart ? '🏁' : '📍'}</span>
+  const icon = L.divIcon({
+    html: `
+      <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 64px; height: 64px;">
+        <!-- iOS style custom translucent coverage range halo matching screenshot exactly -->
+        <div style="position: absolute; width: 52px; height: 52px; border-radius: 50%; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.25);"></div>
+        <div style="position: absolute; width: 28px; height: 28px; border-radius: 50%; background: rgba(56, 189, 248, 0.1); filter: blur(3px);"></div>
+        
+        <!-- Sleek high-contrast black marker node -->
+        <div style="position: absolute; width: 28px; height: 28px; border-radius: 50%; background: #0f172a; border: 2px solid white; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(0,0,0,0.2); transition: transform 0.2s ease;">
+          <span style="font-size: ${showIcon ? '11px' : '9px'}; font-weight: 900; color: white; font-family: system-ui, -apple-system, sans-serif;">
+            ${showIcon ? '🚌' : (count || 3)}
+          </span>
+        </div>
       </div>
-    </div>
-  `,
-  className: '',
-  iconSize: [48, 48],
-  iconAnchor: [24, 24]
-});
+    `,
+    className: '',
+    iconSize: [64, 64],
+    iconAnchor: [32, 32]
+  });
+  minibusIconCache[cacheKey] = icon;
+  return icon;
+};
 
-const plannerStartIcon = (label: string) => L.divIcon({
-  html: `
-    <div style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 120px; height: 60px;">
-      <div style="background: #0891B2; color: white; font-family: system-ui, -apple-system, sans-serif; font-size: 9px; font-weight: 900; padding: 4px 10px; border-radius: 9999px; box-shadow: 0 4px 12px rgba(8,145,178,0.3); border: 2.5px solid white; white-space: nowrap; margin-bottom: 2px;">
-         🏁 ${label}
-      </div>
-      <div style="background: #0891B2; width: 14px; height: 14px; border-radius: 50%; border: 2.5px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.35);"></div>
-    </div>
-  `,
-  className: '',
-  iconSize: [120, 60],
-  iconAnchor: [60, 52]
-});
+const routeIconCache: Record<string, L.DivIcon> = {};
+const routeIcon = (isStart?: boolean) => {
+  const cacheKey = `${isStart}`;
+  if (routeIconCache[cacheKey]) return routeIconCache[cacheKey];
 
-const plannerEndIcon = (label: string) => L.divIcon({
-  html: `
-    <div style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 120px; height: 60px;">
-      <div style="background: #F59E0B; color: white; font-family: system-ui, -apple-system, sans-serif; font-size: 9px; font-weight: 900; padding: 4px 10px; border-radius: 9999px; box-shadow: 0 4px 12px rgba(245,158,11,0.3); border: 2.5px solid white; white-space: nowrap; margin-bottom: 2px;">
-         📍 ${label}
+  const icon = L.divIcon({
+    html: `
+      <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 48px; height: 48px;">
+        <!-- High contrast travel nodes with subtle micro bounce -->
+        <div style="position: absolute; width: 34px; height: 34px; border-radius: 50%; background: rgba(245, 158, 11, 0.15); filter: blur(2px);"></div>
+        <div style="background: ${isStart ? '#0891B2' : '#F59E0B'}; width: 26px; height: 26px; border-radius: 50%; border: 2.5px solid white; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(0,0,0,0.25); animation: bounce 1.2s infinite alternate;">
+          <span style="font-size: 11px;">${isStart ? '🏁' : '📍'}</span>
+        </div>
       </div>
-      <div style="background: #F59E0B; width: 14px; height: 14px; border-radius: 50%; border: 2.5px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.355);"></div>
-    </div>
-  `,
-  className: '',
-  iconSize: [120, 60],
-  iconAnchor: [60, 52]
-});
+    `,
+    className: '',
+    iconSize: [48, 48],
+    iconAnchor: [24, 24]
+  });
+  routeIconCache[cacheKey] = icon;
+  return icon;
+};
+
+const plannerStartIconCache: Record<string, L.DivIcon> = {};
+const plannerStartIcon = (label: string) => {
+  if (plannerStartIconCache[label]) return plannerStartIconCache[label];
+
+  const icon = L.divIcon({
+    html: `
+      <div style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 120px; height: 60px;">
+        <div style="background: #0891B2; color: white; font-family: system-ui, -apple-system, sans-serif; font-size: 9px; font-weight: 900; padding: 4px 10px; border-radius: 9999px; box-shadow: 0 4px 12px rgba(8,145,178,0.3); border: 2.5px solid white; white-space: nowrap; margin-bottom: 2px;">
+           🏁 ${label}
+        </div>
+        <div style="background: #0891B2; width: 14px; height: 14px; border-radius: 50%; border: 2.5px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.35);"></div>
+      </div>
+    `,
+    className: '',
+    iconSize: [120, 60],
+    iconAnchor: [60, 52]
+  });
+  plannerStartIconCache[label] = icon;
+  return icon;
+};
+
+const plannerEndIconCache: Record<string, L.DivIcon> = {};
+const plannerEndIcon = (label: string) => {
+  if (plannerEndIconCache[label]) return plannerEndIconCache[label];
+
+  const icon = L.divIcon({
+    html: `
+      <div style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 120px; height: 60px;">
+        <div style="background: #F59E0B; color: white; font-family: system-ui, -apple-system, sans-serif; font-size: 9px; font-weight: 900; padding: 4px 10px; border-radius: 9999px; box-shadow: 0 4px 12px rgba(245,158,11,0.3); border: 2.5px solid white; white-space: nowrap; margin-bottom: 2px;">
+           📍 ${label}
+        </div>
+        <div style="background: #F59E0B; width: 14px; height: 14px; border-radius: 50%; border: 2.5px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.355);"></div>
+      </div>
+    `,
+    className: '',
+    iconSize: [120, 60],
+    iconAnchor: [60, 52]
+  });
+  plannerEndIconCache[label] = icon;
+  return icon;
+};
+
+const pinnedReportIconCache: Record<string, L.DivIcon> = {};
+const pinnedReportIcon = (type: 'busy' | 'info' | 'minibus', status: string, label: string) => {
+  const cacheKey = `${type}_${status}_${label}`;
+  if (pinnedReportIconCache[cacheKey]) return pinnedReportIconCache[cacheKey];
+
+  const icon = L.divIcon({
+    html: `
+      <div style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 80px; height: 80px;">
+        <!-- Pulsing indicator halo -->
+        <div style="position: absolute; width: 44px; height: 44px; border-radius: 50%; background: ${type === 'busy' ? 'rgba(239, 68, 68, 0.2)' : type === 'minibus' ? 'rgba(6, 182, 212, 0.2)' : 'rgba(245, 158, 11, 0.2)'}; border: 1.5px solid ${type === 'busy' ? '#ef4444' : type === 'minibus' ? '#06b6d4' : '#f59e0b'}; animation: pulse 2s infinite ease-in-out;"></div>
+        
+        <!-- Icon badge container -->
+        <div style="position: absolute; width: 28px; height: 28px; border-radius: 50%; background: ${type === 'busy' ? '#ef4444' : type === 'minibus' ? '#06b6d4' : '#f59e0b'}; border: 2px solid white; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.25); z-index: 10;">
+          <span style="font-size: 13px; color: white;">
+            ${type === 'busy' ? '🔥' : type === 'minibus' ? '🚌' : 'ℹ️'}
+          </span>
+        </div>
+        
+        <!-- Label tooltip hovering above the pin -->
+        <div style="position: absolute; bottom: 58px; background: #0f172a; border: 1.5px solid rgba(255,255,255,0.15); color: white; font-family: system-ui, -apple-system, sans-serif; font-size: 8px; font-weight: 900; padding: 2.5px 7px; border-radius: 6px; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.3); z-index: 12;">
+          ${label}
+        </div>
+      </div>
+    `,
+    className: '',
+    iconSize: [80, 80],
+    iconAnchor: [40, 40]
+  });
+  pinnedReportIconCache[cacheKey] = icon;
+  return icon;
+};
 
 const mapStyles = `
   @keyframes bounce {
@@ -242,7 +340,59 @@ const mapStyles = `
   }
 `;
 
-const Map = memo(({ center, zoom, userLocation, activePath, onStationClick, lang, panelOpen, isOffline = false, plannerStart, plannerEnd }: MapProps) => {
+interface StationMarkerProps {
+  name: string;
+  pos: [number, number];
+  icon: L.DivIcon;
+  onClick: (name: string, pos: [number, number]) => void;
+}
+
+const StationMarker = memo(({ name, pos, icon, onClick }: StationMarkerProps) => {
+  const clickHandler = useCallback(() => {
+    onClick(name, pos);
+  }, [name, pos, onClick]);
+
+  const eventHandlers = useMemo(() => ({
+    click: clickHandler
+  }), [clickHandler]);
+
+  return (
+    <Marker 
+      position={pos} 
+      icon={icon}
+      eventHandlers={eventHandlers}
+    />
+  );
+});
+
+interface ReportMarkerProps {
+  report: StationReport;
+  icon: L.DivIcon;
+  onClick?: (report: StationReport) => void;
+}
+
+const ReportMarker = memo(({ report, icon, onClick }: ReportMarkerProps) => {
+  const clickHandler = useCallback(() => {
+    if (onClick) {
+      onClick(report);
+    }
+  }, [report, onClick]);
+
+  const eventHandlers = useMemo(() => ({
+    click: clickHandler
+  }), [clickHandler]);
+
+  return (
+    <Marker 
+      position={report.location} 
+      icon={icon}
+      eventHandlers={eventHandlers}
+      zIndexOffset={6000}
+    />
+  );
+});
+
+const Map = memo(({ center, zoom, userLocation, activePath, onStationClick, lang, panelOpen, isOffline = false, plannerStart, plannerEnd, reports, onReportClick }: MapProps) => {
   const locations = useMemo(() => Object.entries(COORDS), []);
   const stationData = useMemo(() => STATIONS, []);
   
@@ -368,11 +518,12 @@ const Map = memo(({ center, zoom, userLocation, activePath, onStationClick, lang
           {locations.map(([name, pos], index) => {
             const station = stationLookup.get(name);
             return (
-              <Marker 
+              <StationMarker 
                 key={`loc-${name}-${showStationIcons ? 'icon' : 'num'}`}
-                position={pos} 
+                name={name}
+                pos={pos} 
                 icon={minibusIcon(showStationIcons, station?.r.length || (index % 5 + 2))}
-                eventHandlers={{ click: () => handleMarkerClick(name, pos) }}
+                onClick={onStationClick}
               />
             );
           })}
@@ -445,6 +596,24 @@ const Map = memo(({ center, zoom, userLocation, activePath, onStationClick, lang
             })}
           </Fragment>
         ) : null}
+
+        {/* Community crowdsourced pins & updates */}
+        {reports?.map((report) => (
+          <ReportMarker 
+            key={`report-marker-${report.id}`}
+            report={report}
+            icon={pinnedReportIcon(
+              report.type, 
+              report.status, 
+              report.type === 'busy' 
+                ? (lang === 'en' ? 'BUSY! 🔥' : 'ከፍተኛ ሰልፍ 🔥') 
+                : report.type === 'minibus' 
+                  ? (lang === 'en' ? 'TAXI! 🚌' : 'ታክሲ 🚌') 
+                  : (lang === 'en' ? 'INFO ℹ️' : 'መረጃ ℹ️')
+            )}
+            onClick={onReportClick}
+          />
+        ))}
       </MapContainer>
     </div>
   );
