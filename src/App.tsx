@@ -27,8 +27,6 @@ import {
   COORDS
 } from './data/transitData';
 import { TripPath } from './lib/routing';
-import splashScreenImg from './assets/images/splash_screen_1780219209676.png';
-import donationQrImg from './assets/images/donation_qr_1780219223400.png';
 
 import { twMerge } from 'tailwind-merge';
 import { clsx, type ClassValue } from 'clsx';
@@ -250,7 +248,7 @@ const TelebirrLogo = () => (
 const DonationQRCode = () => (
   <div className="relative w-48 h-48 bg-white border-[3px] border-[#FED100] rounded-2xl p-1.5 flex items-center justify-center shadow-inner overflow-hidden select-none">
     <img 
-      src={donationQrImg} 
+      src="/donation_qr.png" 
       alt="Telebirr Donation QR" 
       className="w-full h-full object-cover rounded-xl"
       referrerPolicy="no-referrer"
@@ -503,7 +501,7 @@ export default function App() {
       <div className="fixed inset-0 z-[9999] bg-[#FFD300] flex flex-col items-center justify-center font-sans select-none overflow-hidden relative">
         {/* Actual generated Splash Screen Image */}
         <img 
-          src={splashScreenImg} 
+          src="/splash_screen.png" 
           alt="Taxi Tera Splash" 
           className="absolute inset-0 w-full h-full object-cover"
           referrerPolicy="no-referrer"
@@ -1448,7 +1446,7 @@ export default function App() {
               {/* The exact Telebirr payment card image */}
               <div className="w-full rounded-[26px] overflow-hidden bg-white shadow-lg relative aspect-[9/16] max-h-[580px]">
                 <img 
-                  src={donationQrImg} 
+                  src="/donation_qr.png" 
                   alt="Telebirr Payment Card" 
                   className="w-full h-full object-cover"
                   referrerPolicy="no-referrer"
