@@ -10,11 +10,15 @@ export interface TripLeg {
   from: string;
   to: string;
   geometry?: [number, number][];
+  distance?: number; // in meters
+  duration?: number; // in seconds
 }
 
 export interface TripPath {
   legs: TripLeg[];
   transfers: number;
+  totalDistance?: number; // in meters
+  totalDuration?: number; // in seconds
 }
 
 /**
@@ -45,7 +49,9 @@ export async function enhancePathWithGeometry(path: TripPath, coords: Record<str
       
       if (data.code === 'Ok' && data.routes && data.routes[0]) {
         const geometry = data.routes[0].geometry.coordinates.map((c: number[]) => [c[1], c[0]]);
-        return { ...leg, geometry };
+        const distance = data.routes[0].distance; // meters
+        const duration = data.routes[0].duration; // seconds
+        return { ...leg, geometry, distance, duration };
       }
     } catch (error) {
       console.warn('Failed to fetch road geometry:', error);
@@ -54,7 +60,36 @@ export async function enhancePathWithGeometry(path: TripPath, coords: Record<str
     return leg;
   }));
 
-  return { ...path, legs: enhancedLegs };
+  let totalDistance = 0;
+  let totalDuration = 0;
+  
+  enhancedLegs.forEach((leg) => {
+    if (leg.distance) totalDistance += leg.distance;
+    if (leg.duration) totalDuration += leg.duration;
+  });
+
+  // Calculate default fallback straight-line geometry distance if OSRM was offline/failed
+  if (totalDistance === 0) {
+    path.legs.forEach((leg) => {
+      const s = coords[leg.from];
+      const e = coords[leg.to];
+      if (s && e) {
+        // Simple approximation of coordinates to meters: 111,000 meters per degree
+        const dy = (e[0] - s[0]) * 111000;
+        const dx = (e[1] - s[1]) * 111000 * Math.cos(s[0] * Math.PI / 180);
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        totalDistance += dist;
+        totalDuration += dist / 8.5; // assume average 30 km/h = 8.5 m/s transit speed
+      }
+    });
+  }
+
+  return { 
+    ...path, 
+    legs: enhancedLegs,
+    totalDistance,
+    totalDuration
+  };
 }
 
 /**

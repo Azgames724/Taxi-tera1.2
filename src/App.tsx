@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { 
   Menu, 
   Search as SearchIcon, 
@@ -16,7 +16,7 @@ import {
   Heart,
   MessageSquare
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, useDragControls } from 'motion/react';
 import Map, { StationReport } from './components/Map';
 import TripPlanner from './components/TripPlanner';
 import { 
@@ -71,61 +71,50 @@ function formatReportTime(timestamp: number, lang: 'en' | 'am'): string {
 const TaxiMapPin = () => (
   <motion.div 
     animate={{ 
-      y: [0, -8, 0],
+      y: [0, -6, 0],
     }}
     transition={{ repeat: Infinity, duration: 2.2, ease: "easeInOut" }}
-    className="relative w-28 h-28 flex items-center justify-center cursor-pointer select-none drop-shadow-[0_12px_24px_rgba(0,0,0,0.18)]"
+    className="relative w-28 h-28 flex items-center justify-center cursor-pointer select-none drop-shadow-[0_12px_24px_rgba(15,23,42,0.12)]"
   >
-    <svg viewBox="0 0 100 120" className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-      {/* Outer map pin solid shape */}
-      <path 
-        d="M50 112 C50 112, 88 78, 88 48 A 38 38 0 1 0 12 48 C 12 78, 50 112, 50 112 Z" 
-        fill="#111111" 
-      />
-      
-      {/* Circle white background cutout inside pin */}
-      <circle cx="50" cy="48" r="26" fill="#FFFFFF" />
-      
-      {/* Taxi Car Icon (Stylized, thick black vector outline) */}
-      <path 
-        d="M34 50 L36 41 C37 38, 39 37, 43 37 L57 37 C61 37, 63 38, 64 41 L66 50 C69 50, 70 52, 70 55 L70 59 C70 61, 68.5 62, 67 62 L67 66 C67 67.5, 65.5 68, 64 68 C62.5 68, 61 67.5, 61 66 L61 62 L39 62 L39 66 C39 67.5, 37.5 68, 36 68 C34.5 68, 33 67.5, 33 66 L33 62 C31.5 62, 30 61, 30 59 L30 55 C30 52, 31 50, 34 50 Z" 
-        fill="#111111" 
-      />
-      {/* Windshield */}
-      <path d="M40 40 L60 40 L57 46 L43 46 Z" fill="#FFFFFF" stroke="#111111" strokeWidth="1" />
-      {/* Lights */}
-      <circle cx="36" cy="55" r="2" fill="#FFCD00" />
-      <circle cx="64" cy="55" r="2" fill="#FFCD00" />
-      {/* Bumper grill */}
-      <rect x="44" y="56" width="12" height="2" rx="1" fill="#FFFFFF" />
-      
-      {/* Checkerboard board wrap below car */}
-      <g transform="translate(35, 59)">
-        {/* Row 1 */}
-        <rect x="0" y="0" width="3" height="3" fill="#111111" />
-        <rect x="3" y="0" width="3" height="3" fill="#FFCD00" />
-        <rect x="6" y="0" width="3" height="3" fill="#111111" />
-        <rect x="9" y="0" width="3" height="3" fill="#FFCD00" />
-        <rect x="12" y="0" width="3" height="3" fill="#111111" />
-        <rect x="15" y="0" width="3" height="3" fill="#FFCD00" />
-        <rect x="18" y="0" width="3" height="3" fill="#111111" />
-        <rect x="21" y="0" width="3" height="3" fill="#FFCD00" />
-        <rect x="24" y="0" width="3" height="3" fill="#111111" />
-        <rect x="27" y="0" width="3" height="3" fill="#FFCD00" />
+    {/* High-fidelity outer glowing circle acting as route radar hub */}
+    <div className="absolute inset-0 bg-slate-900 rounded-[30px] border border-slate-800 flex items-center justify-center p-4">
+      <svg viewBox="0 0 100 100" className="w-full h-full" xmlns="http://www.w3.org/2000/svg" fill="none">
+        {/* Curved major connector route line option 1 */}
+        <path 
+          d="M 22,75 C 22,40 78,60 78,25" 
+          stroke="url(#routeGrad)" 
+          strokeWidth="6.5" 
+          strokeLinecap="round" 
+        />
+        {/* Dynamic dashed option route line represent alternative multi-options */}
+        <path 
+          d="M 22,75 C 38,40 62,60 78,25" 
+          stroke="#06b6d4" 
+          strokeWidth="3.5" 
+          strokeDasharray="5 5" 
+          strokeLinecap="round" 
+          opacity="0.65"
+        />
+        
+        {/* Core Node A (Starting Hub Indicator) */}
+        <circle cx="22" cy="75" r="9" fill="#0f172a" stroke="#06b6d4" strokeWidth="4.5" />
+        <circle cx="22" cy="75" r="3" fill="#06b6d4" />
+        
+        {/* Core Node B (Ending Hub Indicator) */}
+        <circle cx="78" cy="25" r="9" fill="#0f172a" stroke="#fbbf24" strokeWidth="4.5" />
+        <circle cx="78" cy="25" r="3" fill="#fbbf24" />
 
-        {/* Row 2 */}
-        <rect x="0" y="3" width="3" height="3" fill="#FFCD00" />
-        <rect x="3" y="3" width="3" height="3" fill="#111111" />
-        <rect x="6" y="3" width="3" height="3" fill="#FFCD00" />
-        <rect x="9" y="3" width="3" height="3" fill="#111111" />
-        <rect x="12" y="3" width="3" height="3" fill="#FFCD00" />
-        <rect x="15" y="3" width="3" height="3" fill="#111111" />
-        <rect x="18" y="3" width="3" height="3" fill="#FFCD00" />
-        <rect x="21" y="3" width="3" height="3" fill="#111111" />
-        <rect x="24" y="3" width="3" height="3" fill="#FFCD00" />
-        <rect x="27" y="3" width="3" height="3" fill="#111111" />
-      </g>
-    </svg>
+        {/* Beautiful pulsing aura reflecting user-to-user live road-lane activity and traffic coordination */}
+        <circle cx="78" cy="25" r="15" stroke="#fbbf24" strokeWidth="1" opacity="0.4" className="animate-pulse" style={{ transformOrigin: '78px 25px' }} />
+
+        <defs>
+          <linearGradient id="routeGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#06b6d4" />
+            <stop offset="100%" stopColor="#fbbf24" />
+          </linearGradient>
+        </defs>
+      </svg>
+    </div>
   </motion.div>
 );
 
@@ -291,12 +280,13 @@ export default function App() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsSplash(false);
-    }, 1200);
+    }, 2200);
     return () => clearTimeout(timer);
   }, []);
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
+  const dragControls = useDragControls();
   const [activeTab, setActiveTab] = useState<'stations' | 'trips' | 'messages'>('trips');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStation, setSelectedStation] = useState<Station | null>(null);
@@ -322,6 +312,42 @@ export default function App() {
   const [mapZoom, setMapZoom] = useState(14);
   const [panelOpen, setPanelOpen] = useState(false);
   const [panelHeight, setPanelHeight] = useState<'collapsed' | 'expanded' | 'full'>('collapsed');
+  const [windowHeight, setWindowHeight] = useState(() => typeof window !== 'undefined' ? window.innerHeight : 800);
+  const maxHeightForWidth = useRef<Record<number, number>>({});
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      maxHeightForWidth.current[window.innerWidth] = Math.max(
+        maxHeightForWidth.current[window.innerWidth] || 0,
+        window.innerHeight
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      
+      if (!maxHeightForWidth.current[w] || h > maxHeightForWidth.current[w]) {
+        maxHeightForWidth.current[w] = h;
+      }
+      
+      const maxH = maxHeightForWidth.current[w];
+      const activeEl = document.activeElement;
+      const isInputFocused = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA');
+      
+      if (isInputFocused && h < maxH * 0.85) {
+        // Keyboard is likely open, keep the height stable
+        setWindowHeight(maxH);
+      } else {
+        setWindowHeight(h);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const [favorites, setFavorites] = useState<number[]>(() => {
     return JSON.parse(localStorage.getItem('ttFavs') || '[]');
   });
@@ -334,11 +360,11 @@ export default function App() {
   });
 
   const panelY = useMemo(() => {
-    if (selectedStation) return '100%';
-    if (panelHeight === 'full') return '0%';
-    if (panelHeight === 'expanded') return '32vh';
-    return 'calc(92vh - 135px)';
-  }, [panelHeight, selectedStation]);
+    if (selectedStation) return windowHeight;
+    if (panelHeight === 'full') return 160;
+    if (panelHeight === 'expanded') return Math.round(0.32 * windowHeight);
+    return Math.round(0.92 * windowHeight - 135);
+  }, [panelHeight, selectedStation, windowHeight]);
 
   const toggleOffline = useCallback(() => {
     setIsOffline(prev => {
@@ -472,11 +498,20 @@ export default function App() {
             setUserLocation(loc);
             setMapCenter(loc);
           } else {
-            console.warn('Geolocation outside Addis Ababa. Keeping map content locked in Addis Ababa.');
+            console.warn('Geolocation outside Addis Ababa. Positioning user at terminal node in Addis Ababa for testing.');
+            const mockLoc: [number, number] = [9.0222, 38.7469];
+            setUserLocation(mockLoc);
           }
         },
-        () => console.warn('Location access denied')
+        () => {
+          console.warn('Location access denied. Setting default terminal node locator.');
+          const mockLoc: [number, number] = [9.0222, 38.7469];
+          setUserLocation(mockLoc);
+        }
       );
+    } else {
+      const mockLoc: [number, number] = [9.0222, 38.7469];
+      setUserLocation(mockLoc);
     }
   }, []);
 
@@ -578,24 +613,48 @@ export default function App() {
   };
 
   const handleLocateMe = useCallback(() => {
+    // Attempt to trigger iOS orientation permissions requests when interacting
+    if (
+      typeof DeviceOrientationEvent !== 'undefined' &&
+      // @ts-ignore
+      typeof DeviceOrientationEvent.requestPermission === 'function'
+    ) {
+      // @ts-ignore
+      DeviceOrientationEvent.requestPermission().catch(console.error);
+    }
+
     if (userLocation && isInsideAddis(userLocation[0], userLocation[1])) {
       setMapCenter(userLocation);
-      setMapZoom(15);
+      setMapZoom(16);
     } else if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition((pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        if (isInsideAddis(lat, lng)) {
-          const loc: [number, number] = [lat, lng];
-          setUserLocation(loc);
-          setMapCenter(loc);
-          setMapZoom(15);
-        } else {
-          // Reset view to central Addis Ababa
-          setMapCenter([9.0220, 38.7523]);
-          setMapZoom(14);
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          if (isInsideAddis(lat, lng)) {
+            const loc: [number, number] = [lat, lng];
+            setUserLocation(loc);
+            setMapCenter(loc);
+            setMapZoom(16);
+          } else {
+            const mockLoc: [number, number] = [9.0222, 38.7469];
+            setUserLocation(mockLoc);
+            setMapCenter(mockLoc);
+            setMapZoom(16);
+          }
+        },
+        () => {
+          const mockLoc: [number, number] = [9.0222, 38.7469];
+          setUserLocation(mockLoc);
+          setMapCenter(mockLoc);
+          setMapZoom(16);
         }
-      });
+      );
+    } else {
+      const mockLoc: [number, number] = [9.0222, 38.7469];
+      setUserLocation(mockLoc);
+      setMapCenter(mockLoc);
+      setMapZoom(16);
     }
   }, [userLocation]);
 
@@ -613,6 +672,8 @@ export default function App() {
         setMapCenter(start);
         setMapZoom(15);
       }
+      setPanelHeight('expanded');
+      setPanelOpen(true);
     }
   }, []);
 
@@ -623,16 +684,19 @@ export default function App() {
 
   if (isSplash) {
     return (
-      <div className="fixed inset-0 z-[9999] bg-[#FFD300] flex flex-col items-center justify-center font-sans select-none overflow-hidden relative">
-        {/* Actual generated Splash Screen Image */}
+      <div className="fixed inset-0 z-[9999] bg-slate-50 flex flex-col items-center justify-center p-6 font-sans select-none overflow-hidden relative">
+        {/* Dynamic decorative warm light background gradients matching the main app / onboarding */}
+        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-cyan-500/10 via-amber-400/5 to-transparent pointer-events-none" />
+
+        {/* Textured image background, styled in a high-fidelity subtle fashion */}
         <img 
           src="/splash_screen.png" 
           alt="Taxi Tera Splash" 
-          className="absolute inset-0 w-full h-full object-cover"
+          className="absolute inset-0 w-full h-full object-cover opacity-[0.05] mix-blend-multiply pointer-events-none"
           referrerPolicy="no-referrer"
         />
 
-        {/* Floating Language selector toggle in top-right */}
+        {/* Floating Language selector toggle in top-right - matches app language toggle */}
         <div className="absolute top-6 right-6 flex items-center gap-2 z-50">
           <button 
             type="button"
@@ -640,31 +704,71 @@ export default function App() {
               e.stopPropagation();
               setLang(l => l === 'en' ? 'am' : 'en');
             }}
-            className="px-4 py-2 bg-neutral-950/20 backdrop-blur-md shadow-sm rounded-full border border-white/10 font-black text-[10px] text-white hover:bg-neutral-950/30 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
+            className="px-4 py-2 bg-white/90 backdrop-blur-md shadow-[0_4px_20px_rgba(15,23,42,0.05)] rounded-full border border-slate-200/50 font-black text-[10px] text-slate-800 hover:bg-slate-50 active:scale-95 transition-all outline-none cursor-pointer flex items-center gap-1.5"
           >
             <span>🌐</span>
             <span>{lang === 'en' ? 'አማርኛ' : 'English'}</span>
           </button>
         </div>
 
-        {/* Loading / Timeout indicator at bottom overlay */}
-        <div className="absolute bottom-12 inset-x-0 w-full flex flex-col items-center gap-2 z-20 pointer-events-none">
-          <div className="flex gap-2 justify-center items-center">
-            {[0, 1, 2].map(i => (
-              <motion.div 
-                key={i}
-                animate={{ 
-                  opacity: [0.3, 1, 0.3], 
-                  scale: [0.9, 1.25, 0.9],
-                }}
-                transition={{ repeat: Infinity, duration: 1.4, delay: i * 0.18 }}
-                className="w-2.5 h-2.5 rounded-full bg-neutral-950/60"
-              />
-            ))}
+        {/* High-fidelity card container - matches the onboarding card dimensions, corners, and glassmorphism styling */}
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95, y: 15 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+          className="w-full max-w-sm bg-white/95 backdrop-blur-xl border border-slate-200/50 rounded-[36px] p-8 sm:p-10 shadow-[0_32px_64px_-16px_rgba(15,23,42,0.1)] flex flex-col items-center relative z-10"
+        >
+          {/* Brand Emblem (Taxi map pin) matching app branding exactly */}
+          <div className="scale-110 mb-2">
+            <BrandEmblem />
           </div>
-          <span className="text-[10px] uppercase font-black tracking-widest text-neutral-950/60 drop-shadow-sm font-sans">
-            {lang === 'en' ? 'Loading Offline Maps...' : 'የመስመር ውጭ ካርታዎችን በመጫን ላይ...'}
-          </span>
+
+          <h1 className="text-3xl font-black text-slate-950 tracking-tighter select-none font-sans drop-shadow-sm flex flex-col items-center leading-none">
+            <span>TAXI TERA</span>
+            <span className="text-xs tracking-[0.25em] font-black text-slate-400 mt-2 uppercase font-sans">ታክሲ ተራ</span>
+          </h1>
+
+          <p className="text-cyan-600 text-[10px] font-black uppercase tracking-widest mt-4 bg-cyan-50 border border-cyan-100/50 px-3.5 py-1.5 rounded-full text-center">
+            {lang === 'en' ? 'Ethiopia Transit Guide' : 'የኢትዮጵያ የህዝብ ትራንስፖርት መመሪያ'}
+          </p>
+
+          <p className="text-[11px] text-slate-500 font-medium leading-relaxed max-w-[280px] mt-4 mb-1 text-center">
+            {lang === 'en' 
+              ? 'Loading highly detailed offline route systems, transit hubs, and schedules...'
+              : 'የአዲስ አበባን የህዝብ ትራንስፖርት መስመሮችን እና ጣቢያዎችን በመጫን ላይ...'}
+          </p>
+
+          {/* Premium Animated Progress Loading Meter matching actual application aesthetics */}
+          <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden mt-7 border border-slate-200/30 relative">
+            <motion.div 
+              initial={{ width: "0%" }}
+              animate={{ width: "100%" }}
+              transition={{ duration: 2.1, ease: [0.22, 1, 0.36, 1] }}
+              className="h-full bg-gradient-to-r from-cyan-500 via-amber-400 to-cyan-400 absolute left-0 top-0"
+            />
+          </div>
+
+          {/* Subtle loading label with beautiful pulsing dot animation */}
+          <div className="flex items-center gap-1.5 mt-4 text-slate-400">
+            <span className="text-[9px] uppercase font-black tracking-widest">
+              {lang === 'en' ? 'Synchronizing maps' : 'ካርታዎችን በማዘጋጀት ላይ'}
+            </span>
+            <div className="flex gap-0.5 items-center">
+              {[0, 1, 2].map(i => (
+                <motion.div 
+                  key={i}
+                  animate={{ opacity: [0.3, 1, 0.3] }}
+                  transition={{ repeat: Infinity, duration: 1.2, delay: i * 0.15 }}
+                  className="w-1 h-1 rounded-full bg-slate-400"
+                />
+              ))}
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Pure decorative background element indicating system localization ready */}
+        <div className="absolute bottom-6 text-[8px] uppercase tracking-widest font-black text-slate-400/70 select-none pointer-events-none">
+          Addis Ababa Localized Engine v1.0 • Offline Loaded
         </div>
       </div>
     );
@@ -697,16 +801,16 @@ export default function App() {
           <BrandEmblem />
 
           <h2 className="text-xl font-black text-slate-900 tracking-tight leading-none text-center">
-            {lang === 'en' ? 'Welcome to Taxi Tera' : 'እንኳን ወደ ታክሲ ተራ በደህና መጡ'}
+            {lang === 'en' ? 'Get Moving Seamlessly' : 'ቀልጣፋ ጉዞ ይጀምሩ'}
           </h2>
-          <p className="text-cyan-600 text-[10px] font-black uppercase tracking-widest mt-2.5 bg-cyan-50 border border-cyan-100/50 px-3 py-1 rounded-full text-center">
-            {lang === 'en' ? 'Addis Smart Transit' : 'አዲስ ስማርት ትራንዚት'}
+          <p className="text-cyan-600 text-[10px] font-black uppercase tracking-widest mt-2.5 bg-cyan-50 border border-cyan-100/50 px-3.5 py-1.5 rounded-full text-center leading-none">
+            {lang === 'en' ? 'Point A to B Routing & Live Road Status' : 'ትክክለኛ አቅጣጫዎች እና ፈጣን መረጃዎች'}
           </p>
           
           <p className="text-[11px] text-slate-500 font-medium leading-relaxed max-w-[280px] mt-3.5 mb-5 text-center">
             {lang === 'en' 
-              ? 'Personalize your offline transit experience. Choose a custom avatar and enter your name.' 
-              : 'የእርስዎን የእለት ተእለት ጉዞ ረዳት ያብጁ። ለመጀመር ያህል አምሳያ መርጠው ስምዎን ያስገቡ።'}
+              ? 'Choose the smartest paths from Point A to B. Explore multiple alternative routes, locate exactly where stations are situated, and coordinate with other commuters to share live road activity, lane problems, or traffic bottlenecks.' 
+              : 'አዲስ አበባ ውስጥ ከቦታ ቦታ የሚወስዱ የተለያዩ አማራጭ መንገዶችን እና ዋና ጣቢያዎችን በቀላሉ ያግኙ። በተጨማሪም የመንገዶችን መጨናነቅ እና የቀኝ/ግራ መንገዶች ሁኔታን ከሌሎች ተጠቃሚዎች ጋር በእውነተኛ ጊዜ ይጋሩ።'}
           </p>
 
           <form 
@@ -801,7 +905,7 @@ export default function App() {
   return (
     <div className="fixed inset-0 bg-slate-50 flex flex-col font-sans">
       {/* Premium Floating iOS-style Top Status Bar */}
-      <div className="absolute top-4 left-4 right-4 z-[1000] pointer-events-none">
+      <div className="absolute top-4 left-4 right-4 z-[1080] pointer-events-none">
         <div className="max-w-md mx-auto flex flex-col gap-2.5">
           {/* Top Row: User Profile & Quick Switchers */}
           <div className="flex items-center justify-between pointer-events-auto">
@@ -990,38 +1094,75 @@ export default function App() {
         style={{ height: '92vh' }}
         transition={{ type: 'tween', ease: [0.215, 0.61, 0.355, 1], duration: 0.32 }}
         drag={selectedStation ? false : "y"}
-        dragConstraints={{ top: 0, bottom: 0 }}
-        dragElastic={0.05}
+        dragControls={dragControls}
+        dragListener={false}
+        dragConstraints={{ 
+          top: 160 - (typeof panelY === 'number' ? panelY : 160), 
+          bottom: Math.round(0.92 * windowHeight - 135) - (typeof panelY === 'number' ? panelY : 160) 
+        }}
+        dragElastic={0.15}
         onDragEnd={(_, info) => {
           const velocity = info.velocity.y;
           const offset = info.offset.y;
+          const currentY = (typeof panelY === 'number' ? panelY : 160) + offset;
 
-          if (velocity > 400 || offset > 100) {
-            setPanelHeight('collapsed');
-            setPanelOpen(false);
-          } else if (velocity < -400 || offset < -100) {
-            setPanelHeight('full');
-            setPanelOpen(true);
-          } else if (Math.abs(offset) > 40) {
-            if (offset < 0) {
-              setPanelHeight(panelHeight === 'collapsed' ? 'expanded' : 'full');
+          const snapFull = 160;
+          const snapExpanded = Math.round(0.32 * windowHeight);
+          const snapCollapsed = Math.round(0.92 * windowHeight - 135);
+
+          if (velocity < -300) {
+            // Flicked up - go up
+            if (panelHeight === 'collapsed') {
+              setPanelHeight('expanded');
               setPanelOpen(true);
             } else {
-              setPanelHeight(panelHeight === 'full' ? 'expanded' : 'collapsed');
-              if (panelHeight === 'expanded') setPanelOpen(false);
+              setPanelHeight('full');
+              setPanelOpen(true);
+            }
+          } else if (velocity > 300) {
+            // Flicked down - go down
+            if (panelHeight === 'full') {
+              setPanelHeight('expanded');
+              setPanelOpen(true);
+            } else {
+              setPanelHeight('collapsed');
+              setPanelOpen(false);
+            }
+          } else {
+            // No high velocity, snap to closest target
+            const distFull = Math.abs(currentY - snapFull);
+            const distExpanded = Math.abs(currentY - snapExpanded);
+            const distCollapsed = Math.abs(currentY - snapCollapsed);
+
+            const minDist = Math.min(distFull, distExpanded, distCollapsed);
+
+            if (minDist === distFull) {
+              setPanelHeight('full');
+              setPanelOpen(true);
+            } else if (minDist === distExpanded) {
+              setPanelHeight('expanded');
+              setPanelOpen(true);
+            } else {
+              setPanelHeight('collapsed');
+              setPanelOpen(false);
             }
           }
         }}
-        className={cn(
-          "fixed inset-x-0 bottom-0 bg-white rounded-t-[36px] shadow-[0_-8px_40px_rgba(0,0,0,0.08)] flex flex-col border-t border-slate-100 overflow-hidden",
-          panelHeight === 'full' ? "z-[1050]" : "z-[50]"
-        )}
+        className="fixed inset-x-0 bottom-0 bg-white rounded-t-[36px] shadow-[0_-8px_40px_rgba(0,0,0,0.08)] flex flex-col border-t border-slate-100 overflow-hidden z-[1090]"
       >
-        {/* iOS-style slide handle */}
+        {/* iOS-style slide handle with extra-tall hit target */}
         <div 
-          className="p-3 shrink-0 cursor-grab active:cursor-grabbing flex flex-col items-center"
+          className="py-4 pb-2 shrink-0 cursor-grab active:cursor-grabbing flex flex-col items-center select-none"
+          onPointerDown={(e) => {
+            if (!selectedStation) {
+              dragControls.start(e);
+            }
+          }}
           onClick={() => {
             if (panelHeight === 'collapsed') {
+              setPanelHeight('expanded');
+              setPanelOpen(true);
+            } else if (panelHeight === 'full') {
               setPanelHeight('expanded');
               setPanelOpen(true);
             } else {
@@ -1030,7 +1171,7 @@ export default function App() {
             }
           }}
         >
-          <div className="w-10 h-1 bg-slate-200 rounded-full" />
+          <div className="w-12 h-1.5 bg-slate-200/90 rounded-full" />
         </div>
 
         {/* Custom Segment Tab Selector */}
@@ -1126,7 +1267,7 @@ export default function App() {
         )}
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto px-4 py-1.5 scrollbar-hide pb-36">
+        <div className="flex-1 overflow-y-auto px-4 py-1.5 scrollbar-hide pb-32">
           <AnimatePresence mode="wait" initial={false}>
             {activeTab === 'stations' ? (
               <motion.div 
@@ -1828,53 +1969,94 @@ export default function App() {
       <AnimatePresence>
         {isAboutOpen && (
           <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            className="fixed inset-0 z-[10000] p-6 flex items-center justify-center bg-slate-900/40 backdrop-blur-md"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[10000] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 pointer-events-auto"
           >
-            <div className="bg-white w-full max-w-md rounded-[32px] overflow-hidden shadow-2xl flex flex-col max-h-[80vh]">
-              <div className="p-8 pb-4 text-center">
-                <div className="w-16 h-16 bg-primary/10 text-primary rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <Bus className="w-8 h-8" />
+            <motion.div 
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              transition={{ type: "spring", duration: 0.5, bounce: 0.15 }}
+              className="bg-white/95 backdrop-blur-xl border border-slate-200/50 w-full max-w-sm rounded-[36px] shadow-[0_32px_64px_-16px_rgba(15,23,42,0.15)] flex flex-col relative overflow-hidden select-none p-6 pt-8 pb-5 font-sans"
+            >
+              {/* Close Button X */}
+              <button 
+                onClick={() => setIsAboutOpen(false)}
+                className="absolute top-4 right-4 p-1.5 bg-slate-50 hover:bg-slate-100 rounded-full text-slate-400 transition-colors cursor-pointer focus:outline-none border-none"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="flex flex-col items-center text-center pb-4 border-b border-slate-100">
+                <div className="scale-90 mb-1">
+                  <BrandEmblem />
                 </div>
-                <h2 className="text-2xl font-black tracking-tight">Taxi Tera</h2>
-                <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Developed by Tejo Interactives</p>
-                <p className="text-slate-400 text-sm mt-2">Addis Ababa Smart Transit</p>
+                <h2 className="text-2xl font-black text-slate-950 tracking-tighter leading-none mt-1">TAXI TERA</h2>
+                <span className="text-[10px] tracking-[0.25em] font-black text-slate-400 mt-1.5 uppercase">ታክሲ ተራ</span>
+                
+                <p className="text-neutral-500 text-[10px] font-bold uppercase tracking-widest mt-3.5 px-3 py-1 bg-slate-50 border border-slate-100 rounded-full">
+                  {lang === 'en' ? 'Ethiopia Transit Guide' : 'የኢትዮጵያ የህዝብ ትራንስፖርት መመሪያ'}
+                </p>
               </div>
               
-              <div className="flex-1 overflow-y-auto px-8 py-4 space-y-6 text-slate-600">
-                <section>
-                  <h3 className="font-bold text-slate-800 mb-2">Our Mission</h3>
-                  <p className="text-sm leading-relaxed">
-                    Taxi Tera is designed to help commuters in Addis Ababa navigate the city's complex minibus and light rail network with ease using precise location-based routing.
+              <div className="flex-1 overflow-y-auto my-4 pr-1 space-y-4 max-h-[40vh] text-slate-600 font-sans custom-scrollbar">
+                <section className="bg-slate-50/60 p-3.5 rounded-2xl border border-slate-100/50">
+                  <h3 className="font-extrabold text-xs text-slate-900 mb-1 uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="text-amber-500">🎯</span>
+                    {lang === 'en' ? 'Get from Point A to B' : 'ከመነሻ እስከ መድረሻ'}
+                  </h3>
+                  <p className="text-[11px] leading-relaxed font-medium text-slate-500">
+                    {lang === 'en' 
+                      ? "Taxi Tera offers smooth, intuitive solutions to help you travel from Point A to Point B across the city effortlessly. Explore multiple dynamic route options and find your best journey instantly."
+                      : "ታክሲ ተራ ከቦታ ቦታ (ከመነሻ እስከ መድረሻ) ቀልጣፋ በሆነ መንገድ ለመጓዝ የሚረዳ የአቅጣጫ መመሪያዎ ነው። በርካታ አማራጭ መስመሮችን በማቅረብ ሁሌም ቀላሉን መንገድ እንዲመርጡ ያስችልዎታል።"}
                   </p>
                 </section>
                 
-                <section>
-                  <h3 className="font-bold text-slate-800 mb-2">Real Road Data</h3>
-                  <p className="text-sm leading-relaxed">
-                    Unlike other apps, we calculate actual walking and driving paths using OSRM geometry, ensuring you see the exact road path, not just a straight line.
+                <section className="bg-slate-50/60 p-3.5 rounded-2xl border border-slate-100/50">
+                  <h3 className="font-extrabold text-xs text-slate-900 mb-1 uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="text-cyan-500">🗺️</span>
+                    {lang === 'en' ? 'Station Locations' : 'የጣቢያዎች መገኛ'}
+                  </h3>
+                  <p className="text-[11px] leading-relaxed font-medium text-slate-500">
+                    {lang === 'en'
+                      ? "Easily find and discover exactly where key transit hubs and station platforms are situated on the street map. Say goodbye to guesswork and navigate city transfers confidently."
+                      : "በከተማዋ ባሉ ምቹ ካርታዎች ላይ ዋና ዋና የመጓጓዣ ጣቢያዎችን እና የመሰብሰቢያ ቦታዎችን በቀላሉ ያግኙ።"}
                   </p>
                 </section>
 
-                <section>
-                  <h3 className="font-bold text-slate-800 mb-2">Open Transit</h3>
-                  <p className="text-sm leading-relaxed">
-                    Built for the community, by the community. We aim to map every "Taxi Tera" (Taxi Hub) in the city to reduce wait times and transfer confusion.
+                <section className="bg-slate-50/60 p-3.5 rounded-2xl border border-slate-100/50">
+                  <h3 className="font-extrabold text-xs text-slate-900 mb-1 uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="text-emerald-500">👥</span>
+                    {lang === 'en' ? 'Commuter Crowd Reports' : 'የመንገድ ላይ መረጃዎች'}
+                  </h3>
+                  <p className="text-[11px] leading-relaxed font-medium text-slate-500">
+                    {lang === 'en'
+                      ? "Connect and coordinate with other live commuters in real time. Share crowd-sourced updates to let fellow travelers know if roads are busy or if there are blockages or problems with specific lanes."
+                      : "ከሌሎች ተጓዦች ጋር በመገናኘት የመንገዶችን መጨናነቅ እና ልዩ ልዩ የመንገድ ላይ ሁኔታዎችን በእውነተኛ ጊዜ መጋራት እና ማየት ይችላሉ።"}
                   </p>
                 </section>
+
+                <div className="pt-2 flex flex-col items-center gap-1 border-t border-slate-100/80">
+                  <div className="text-[10px] text-cyan-600 font-black uppercase tracking-wider">
+                    {lang === 'en' ? 'Designed & Developed by Abenezer' : 'የበለፀገውና የተነደፈው በአበነዘር ነው'}
+                  </div>
+                  <div className="text-[8px] text-slate-400 font-mono uppercase tracking-widest">
+                    v1.0.4 • Addis Ababa, Ethiopia
+                  </div>
+                </div>
               </div>
 
-              <div className="p-6 bg-slate-50 border-t border-slate-100 mt-auto">
+              <div className="pt-2 mt-auto">
                 <button 
                   onClick={() => setIsAboutOpen(false)}
-                  className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold shadow-lg active:scale-95 transition-all"
+                  className="w-full py-4 bg-slate-950 hover:bg-slate-800 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest active:scale-[0.98] transition-all cursor-pointer shadow-md leading-none border-none"
                 >
-                  Got it!
+                  {lang === 'en' ? 'Got it!' : 'ተረዳሁት!'}
                 </button>
               </div>
-            </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -2026,7 +2208,7 @@ export default function App() {
         {[
           { id: 'trips', label: lang === 'en' ? 'Planner' : 'አቅጣጫ', icon: Navigation },
           { id: 'favs', label: lang === 'en' ? 'Favorites' : 'ተወዳጆች', icon: Star },
-          { id: 'about', label: lang === 'en' ? 'About Tejo' : 'ስለ መተግበሪያው', icon: Info }
+          { id: 'about', label: lang === 'en' ? 'About App' : 'ስለ መተግበሪያው', icon: Info }
         ].map((item) => {
           const isActive = (item.id === 'trips')
             ? (activeTab === 'trips' && panelOpen)

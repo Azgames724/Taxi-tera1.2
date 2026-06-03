@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useEffect, useMemo, Fragment, memo, useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, Fragment, memo, useRef, useState, useCallback, MutableRefObject } from 'react';
 import { MapContainer, TileLayer, Marker, useMap, Polyline, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -159,17 +159,45 @@ function ZoomTracker({ onZoomChange }: { onZoomChange: (z: number) => void }) {
   return null;
 }
 
-const userIcon = L.divIcon({
+const createUserIcon = (heading: number) => L.divIcon({
   html: `
-    <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 48px; height: 48px;">
-      <!-- Glowing core pulse representing localized position -->
-      <div style="position: absolute; width: 32px; height: 32px; border-radius: 50%; background: rgba(8, 145, 178, 0.15); animation: pulse 2s infinite ease-in-out;"></div>
-      <div style="position: absolute; width: 16px; height: 16px; border-radius: 50%; background: #0891B2; border: 2.5px solid white; box-shadow: 0 2px 10px rgba(0,0,0,0.25);"></div>
+    <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 160px; height: 160px;">
+      <!-- Directional beam SVG light cone with soft gradient and blur -->
+      <svg style="position: absolute; width: 160px; height: 160px; transform: rotate(${heading}deg); pointer-events: none; z-index: 5;" viewBox="0 0 160 160">
+        <defs>
+          <linearGradient id="beamGradient-${Math.floor(heading)}" x1="0" y1="1" x2="0" y2="0">
+            <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.75"/>
+            <stop offset="25%" stop-color="#06b6d4" stop-opacity="0.45"/>
+            <stop offset="60%" stop-color="#0891B2" stop-opacity="0.18"/>
+            <stop offset="100%" stop-color="#0891B2" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <path d="M 80 80 L 40 10.72 A 80 80 0 0 1 120 10.72 Z" fill="url(#beamGradient-${Math.floor(heading)})" filter="blur(1px)" />
+      </svg>
+      
+      <!-- Pulsating general accuracy aura/radar halo -->
+      <div style="position: absolute; width: 32px; height: 32px; border-radius: 50%; background: rgba(8, 145, 178, 0.15); border: 1.5px solid rgba(8, 145, 178, 0.35); animation: pulse 2.2s infinite ease-in-out; z-index: 6;"></div>
+      
+      <!-- Sparkling premium white/cyan core GPS dot -->
+      <div style="position: absolute; width: 16px; height: 16px; border-radius: 50%; background: #06b6d4; border: 2.5px solid white; box-shadow: 0 0 12px rgba(6, 182, 212, 0.9), 0 2px 8px rgba(0,0,0,0.3); z-index: 10;"></div>
+      
+      <!-- Small directional tip directly mounted to indicate precise vector -->
+      <div style="
+        position: absolute;
+        width: 0;
+        height: 0;
+        border-left: 4px solid transparent;
+        border-right: 4px solid transparent;
+        border-bottom: 6px solid #0891B2;
+        transform-origin: 50% 12px;
+        transform: translate(0, -12px) rotate(${heading}deg);
+        z-index: 11;
+      "></div>
     </div>
   `,
   className: '',
-  iconSize: [48, 48],
-  iconAnchor: [24, 24]
+  iconSize: [160, 160],
+  iconAnchor: [80, 80]
 });
 
 const minibusIconCache: Record<string, L.DivIcon> = {};
@@ -392,7 +420,107 @@ const ReportMarker = memo(({ report, icon, onClick }: ReportMarkerProps) => {
   );
 });
 
+interface InteractiveLocationTrackerProps {
+  userLocation: [number, number] | null;
+  setHeading: (h: number) => void;
+  hasSensor: MutableRefObject<boolean>;
+  lastInteractionTime: MutableRefObject<number>;
+}
+
+const InteractiveLocationTracker = memo(({ userLocation, setHeading, hasSensor, lastInteractionTime }: InteractiveLocationTrackerProps) => {
+  useMapEvents({
+    mousemove: (e) => {
+      if (userLocation && !hasSensor.current) {
+        const userLat = userLocation[0];
+        const userLng = userLocation[1];
+        const mouseLat = e.latlng.lat;
+        const mouseLng = e.latlng.lng;
+        
+        const dLat = mouseLat - userLat;
+        const dLng = mouseLng - userLng;
+        
+        const angleRad = Math.atan2(dLng, dLat);
+        let angleDeg = (angleRad * 180) / Math.PI;
+        if (angleDeg < 0) {
+          angleDeg += 360;
+        }
+        
+        setHeading(angleDeg);
+        lastInteractionTime.current = Date.now();
+      }
+    }
+  });
+  return null;
+});
+
 const Map = memo(({ center, zoom, userLocation, activePath, onStationClick, lang, panelOpen, isOffline = false, plannerStart, plannerEnd, reports, onReportClick }: MapProps) => {
+  const [heading, setHeading] = useState(0);
+  const hasSensor = useRef(false);
+  const lastInteractionTime = useRef(0);
+
+  useEffect(() => {
+    let lastEventTime = 0;
+
+    const handleOrientation = (e: DeviceOrientationEvent) => {
+      let currentHeading = 0;
+      let detected = false;
+
+      // 1. WebKit Compass heading (iOS Safari)
+      if ('webkitCompassHeading' in e) {
+        const h = e.webkitCompassHeading as number;
+        if (h !== undefined && h !== null && !isNaN(h)) {
+          currentHeading = h;
+          detected = true;
+        }
+      } 
+      // 2. Standard absolute orientation (Android Chrome / generic)
+      else if (e.alpha !== null && e.alpha !== undefined && !isNaN(e.alpha)) {
+        currentHeading = (360 - e.alpha) % 360;
+        detected = true;
+      }
+
+      if (detected) {
+        hasSensor.current = true;
+        lastEventTime = Date.now();
+        setHeading(currentHeading);
+      }
+    };
+
+    if ('ondeviceorientationabsolute' in (window as any)) {
+      (window as any).addEventListener('deviceorientationabsolute', handleOrientation);
+    } else {
+      (window as any).addEventListener('deviceorientation', handleOrientation);
+    }
+
+    // Gentle desktop fallback sweep
+    let animationFrameId: number;
+    let angle = 0;
+    const animate = () => {
+      const now = Date.now();
+      const noSensor = !hasSensor.current || (now - lastEventTime > 2500);
+      const noInteraction = now - lastInteractionTime.current > 2500;
+
+      if (noSensor && noInteraction) {
+        angle += 0.015;
+        // Sweeps fluidly centered around looking East-North-East
+        const sweep = 45 + Math.sin(angle) * 28;
+        setHeading(sweep);
+      }
+      animationFrameId = requestAnimationFrame(animate);
+    };
+
+    animationFrameId = requestAnimationFrame(animate);
+
+    return () => {
+      if ('ondeviceorientationabsolute' in (window as any)) {
+        (window as any).removeEventListener('deviceorientationabsolute', handleOrientation);
+      } else {
+        (window as any).removeEventListener('deviceorientation', handleOrientation);
+      }
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, []);
+
   const locations = useMemo(() => Object.entries(COORDS), []);
   const stationData = useMemo(() => STATIONS, []);
   
@@ -489,8 +617,10 @@ const Map = memo(({ center, zoom, userLocation, activePath, onStationClick, lang
           </Fragment>
         )}
         
+        <InteractiveLocationTracker userLocation={userLocation} setHeading={setHeading} hasSensor={hasSensor} lastInteractionTime={lastInteractionTime} />
+        
         {userLocation && (
-          <Marker position={userLocation} icon={userIcon} zIndexOffset={3000} />
+          <Marker position={userLocation} icon={createUserIcon(heading)} zIndexOffset={3000} />
         )}
 
         {plannerStart && (

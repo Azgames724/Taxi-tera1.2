@@ -318,7 +318,11 @@ export default function TripPlanner({ lang, onPathSelect, userLocation, initialO
                 <input 
                   value={origin}
                   onChange={(e) => { setOrigin(e.target.value); setShowOriginAuto(true); }}
-                  onFocus={() => setShowOriginAuto(true)}
+                  onFocus={() => {
+                    setShowOriginAuto(true);
+                    setShowDestAuto(false);
+                  }}
+                  onBlur={() => setTimeout(() => setShowOriginAuto(false), 200)}
                   placeholder={lang === 'am' ? 'የት መነሳት ይፈልጋሉ?' : 'Where are you starting from?'}
                   className="bg-transparent border-none outline-none w-full text-xs font-black text-slate-800 placeholder-slate-400 leading-none py-0.5"
                 />
@@ -377,7 +381,11 @@ export default function TripPlanner({ lang, onPathSelect, userLocation, initialO
                 <input 
                   value={destination}
                   onChange={(e) => { setDestination(e.target.value); setShowDestAuto(true); }}
-                  onFocus={() => setShowDestAuto(true)}
+                  onFocus={() => {
+                    setShowDestAuto(true);
+                    setShowOriginAuto(false);
+                  }}
+                  onBlur={() => setTimeout(() => setShowDestAuto(false), 200)}
                   placeholder={lang === 'am' ? 'የት መድረስ ይፈልጋሉ?' : 'Where do you want to go?'}
                   className="bg-transparent border-none outline-none w-full text-xs font-black text-slate-800 placeholder-slate-400 leading-none py-0.5"
                 />
@@ -433,93 +441,130 @@ export default function TripPlanner({ lang, onPathSelect, userLocation, initialO
       {/* Results */}
       <div className="flex flex-col gap-3">
         {results.length > 0 ? (
-          results.map((path, idx) => (
-            <motion.div 
-              key={`path-${idx}-${path.legs.map(l => l.from).join('-')}`}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              onClick={() => {
-                setSelectedIdx(idx);
-                onPathSelect(path);
-              }}
-              className={cn(
-                "bg-white rounded-xl p-3 shadow-sm border transition-all group cursor-pointer",
-                selectedIdx === idx ? "border-primary ring-1 ring-primary/20 shadow-md" : "border-slate-100 hover:border-primary/30"
-              )}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <span className="p-1 px-1.5 bg-primary/5 text-primary text-[8px] font-black rounded uppercase tracking-wider">
-                    {path.transfers === 0 ? 'Direct' : `${path.transfers} ${path.transfers === 1 ? 'Trans' : 'Trans'}`}
-                  </span>
-                </div>
-                <div className="text-[9px] text-slate-400 font-bold">Route {idx + 1}</div>
-              </div>
+          results.map((path, idx) => {
+            const totalDistKm = path.totalDistance ? (path.totalDistance / 1000).toFixed(1) : null;
+            const totalDurationMins = path.totalDuration ? Math.round(path.totalDuration / 60) : null;
+            
+            const estimateFare = (distMeters: number) => {
+              if (distMeters <= 2000) return 10;
+              if (distMeters <= 4000) return 13;
+              if (distMeters <= 7000) return 18;
+              if (distMeters <= 12000) return 25;
+              return 35;
+            };
+            const totalFare = path.totalDistance ? estimateFare(path.totalDistance) : null;
 
-              <div className="flex flex-col gap-3 relative">
-                {/* Visual line */}
-                <div className="absolute left-[9px] top-5 bottom-5 w-[1.5px] bg-slate-50 group-hover:bg-primary/10 transition-colors" />
-
-                {/* Optional Walking Step */}
-                <div className="flex gap-3 relative z-10">
-                  <div className="w-5 h-5 bg-slate-100 rounded-full border-[3px] border-white shadow-sm flex items-center justify-center shrink-0">
-                    <div className="w-1.5 h-1.5 bg-slate-300 rounded-full" />
+            return (
+              <motion.div 
+                key={`path-${idx}-${path.legs.map(l => l.from).join('-')}`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                onClick={() => {
+                  setSelectedIdx(idx);
+                  onPathSelect(path);
+                }}
+                className={cn(
+                  "bg-white rounded-xl p-3 shadow-sm border transition-all duration-300 group cursor-pointer",
+                  selectedIdx === idx ? "border-primary ring-2 ring-primary/15 shadow-md scale-[1.01]" : "border-slate-100 hover:border-slate-300/80 hover:bg-slate-50/30"
+                )}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="p-1 px-1.5 bg-primary/5 text-primary text-[8px] font-black rounded uppercase tracking-wider border border-primary/10">
+                      {path.transfers === 0 ? (lang === 'am' ? 'ቀጥታ መስመር' : 'Direct') : `${path.transfers} ${lang === 'am' ? 'ግንኙነት' : (path.transfers === 1 ? 'Transfer' : 'Transfers')}`}
+                    </span>
+                    {totalDistKm && (
+                      <span className="text-[10px] text-slate-500 font-bold bg-slate-50 border border-slate-100 px-1.5 py-0.5 rounded leading-none">
+                        {totalDistKm} km
+                      </span>
+                    )}
+                    {totalDurationMins && (
+                      <span className="text-[10px] text-slate-500 font-bold bg-slate-50 border border-slate-100 px-1.5 py-0.5 rounded leading-none">
+                        {totalDurationMins} {lang === 'en' ? 'mins' : 'ደቂቃ'}
+                      </span>
+                    )}
+                    {totalFare && (
+                      <span className="text-[10px] text-emerald-700 font-black bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded leading-none flex items-center gap-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
+                        💰 {totalFare} {lang === 'en' ? 'ETB' : 'ብር'}
+                      </span>
+                    )}
                   </div>
-                  <div className="flex-1">
-                    <div className="text-xs font-bold text-slate-700">Walk to {path.legs[0].from}</div>
-                  </div>
+                  <div className="text-[9px] text-slate-400 font-bold shrink-0">{lang === 'en' ? 'Option' : 'አማራጭ'} {idx + 1}</div>
                 </div>
 
-                {path.legs.map((leg, legIdx) => {
-                  const colors = [
-                    'bg-cyan-500',
-                    'bg-amber-500',
-                    'bg-indigo-500',
-                    'bg-rose-500'
-                  ];
-                  const dotColor = colors[legIdx % colors.length];
-                  
-                  return (
-                    <div key={legIdx} className="flex gap-3 relative z-10">
-                      <div className={cn(
-                        "w-5 h-5 rounded-full border-[3px] border-white shadow-sm flex items-center justify-center shrink-0",
-                        dotColor
-                      )}>
-                        <div className="w-1.5 h-1.5 bg-white rounded-full" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs font-bold text-slate-800 truncate">
-                          {legIdx === 0 ? `Board @ ${leg.from}` : `Transfer @ ${leg.from}`}
-                        </div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className={cn(
-                            "text-[8px] px-1 py-0.5 rounded font-black border uppercase tracking-tighter",
-                            legIdx % 2 === 0 ? "bg-cyan-50 text-cyan-600 border-cyan-100" : "bg-amber-50 text-amber-600 border-amber-100"
-                          )}>
-                            {leg.route.code}
-                          </span>
-                          <span className="text-[10px] text-slate-500 truncate font-medium">{leg.route.name}</span>
-                        </div>
+                <div className="flex flex-col gap-3 relative">
+                  {/* Visual line */}
+                  <div className="absolute left-[9px] top-5 bottom-5 w-[1.5px] bg-slate-100 group-hover:bg-primary/20 transition-colors" />
+
+                  {/* Optional Walking Step */}
+                  <div className="flex gap-3 relative z-10">
+                    <div className="w-5 h-5 bg-slate-50 rounded-full border-[3px] border-white shadow-sm flex items-center justify-center shrink-0">
+                      <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-pulse" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-xs font-bold text-slate-700">
+                        {lang === 'en' ? `Walk to ${path.legs[0].from}` : `${path.legs[0].from} ድረስ በእግር መጓዝ`}
                       </div>
                     </div>
-                  );
-                })}
-
-                <div className="flex gap-3 relative z-10">
-                  <div className="w-5 h-5 bg-emerald-500 rounded-full border-[3px] border-white shadow-sm flex items-center justify-center shrink-0">
-                    <div className="w-1.5 h-1.5 bg-white rounded-full" />
                   </div>
-                  <div className="flex-1">
-                    <div className="text-xs font-bold text-slate-700">Arrival: {destination}</div>
+
+                  {path.legs.map((leg, legIdx) => {
+                    const colors = [
+                      'bg-cyan-500',
+                      'bg-amber-500',
+                      'bg-indigo-500',
+                      'bg-rose-500'
+                    ];
+                    const dotColor = colors[legIdx % colors.length];
+                    
+                    return (
+                      <div key={legIdx} className="flex gap-3 relative z-10">
+                        <div className={cn(
+                          "w-5 h-5 rounded-full border-[3px] border-white shadow-sm flex items-center justify-center shrink-0",
+                          dotColor
+                        )}>
+                          <div className="w-1.5 h-1.5 bg-white rounded-full" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-bold text-slate-800 truncate">
+                            {legIdx === 0 
+                              ? (lang === 'en' ? `Board @ ${leg.from}` : `ከ${leg.from} ይሳፈሩ`) 
+                              : (lang === 'en' ? `Transfer @ ${leg.from}` : `ከ${leg.from} መገናኛ ያስተላልፉ`)}
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className={cn(
+                              "text-[8px] px-1.5 py-0.5 rounded font-black border uppercase tracking-tighter shadow-sm",
+                              legIdx % 2 === 0 ? "bg-cyan-50 text-cyan-600 border-cyan-100" : "bg-amber-50 text-amber-600 border-amber-100"
+                            )}>
+                              {leg.route.code}
+                            </span>
+                            <span className="text-[10px] text-slate-500 truncate font-semibold">{leg.route.name}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  <div className="flex gap-3 relative z-10">
+                    <div className="w-5 h-5 bg-emerald-500 rounded-full border-[3px] border-white shadow-sm flex items-center justify-center shrink-0">
+                      <div className="w-1.5 h-1.5 bg-white rounded-full" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-xs font-bold text-slate-700">
+                        {lang === 'en' ? `Arrival: ${destination}` : `መድረሻ፡ ${destination}`}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </motion.div>
-          ))
+              </motion.div>
+            );
+          })
         ) : origin && destination && (
           <div className="p-8 text-center bg-white rounded-2xl border border-dashed border-slate-300">
             <Info className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-            <p className="text-slate-400 text-sm">No routes found for this path.</p>
+            <p className="text-slate-400 text-sm">
+              {lang === 'en' ? 'No routes found for this path.' : 'ለዚህ መንገድ ምንም መሥመር አልተገኘም።'}
+            </p>
           </div>
         )}
       </div>
