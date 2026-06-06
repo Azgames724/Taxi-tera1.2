@@ -1,0 +1,42 @@
+{
+  "entities": {
+    "Report": {
+      "title": "Report",
+      "description": "A crowd or status report submitted by a user for a station.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique report ID" },
+        "stationName": { "type": "string", "description": "Name of the target station" },
+        "type": { "type": "string", "enum": ["busy", "info", "minibus"] },
+        "status": { "type": "string", "enum": ["critical", "moderate", "free", "info", "pinned"] },
+        "userName": { "type": "string" },
+        "userAvatar": { "type": "string" },
+        "userBg": { "type": "string" },
+        "text": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "location": { "type": "array" }
+      },
+      "required": ["id", "stationName", "type", "status", "userName", "userAvatar", "userBg", "text", "timestamp", "location"]
+    },
+    "RouteUpvote": {
+      "title": "RouteUpvote",
+      "description": "An upvote metric for an Addis transit route to prove community verified legitimacy.",
+      "type": "object",
+      "properties": {
+        "routeKey": { "type": "string" },
+        "votes": { "type": "number" }
+      },
+      "required": ["routeKey", "votes"]
+    }
+  },
+  "firestore": {
+    "/reports/{reportId}": {
+      "schema": "Report",
+      "description": "Global user-submitted transit guides and traffic updates."
+    },
+    "/route_upvotes/{routeKey}": {
+      "schema": "RouteUpvote",
+      "description": "Verification votes indicating highly reliable paths."
+    }
+  }
+}

@@ -1,0 +1,38 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Reports collection validation
+    match /reports/{reportId} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasAll(['id', 'stationName', 'type', 'status', 'userName', 'userAvatar', 'userBg', 'text', 'timestamp', 'location'])
+                    && request.resource.data.id is string
+                    && request.resource.data.stationName is string
+                    && request.resource.data.stationName.size() <= 200
+                    && request.resource.data.type in ['busy', 'info', 'minibus']
+                    && request.resource.data.status in ['critical', 'moderate', 'free', 'info', 'pinned']
+                    && request.resource.data.userName is string
+                    && request.resource.data.userName.size() <= 100
+                    && request.resource.data.userAvatar is string
+                    && request.resource.data.userBg is string
+                    && request.resource.data.text is string
+                    && request.resource.data.text.size() <= 550
+                    && request.resource.data.timestamp is int
+                    && request.resource.data.location is list;
+      allow delete: if true;
+    }
+
+    // Route upvotes collection validation
+    match /route_upvotes/{routeKey} {
+      allow read: if true;
+      allow create, update: if request.resource.data.keys().hasAll(['routeKey', 'votes'])
+                            && request.resource.data.routeKey is string
+                            && request.resource.data.votes is int
+                            && request.resource.data.votes >= 0;
+    }
+  }
+}

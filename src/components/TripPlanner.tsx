@@ -47,32 +47,13 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { COORDS, TRANSLATIONS, Station, STATIONS } from '../data/transitData';
 import { findTripPaths, TripPath, enhancePathWithGeometry } from '../lib/routing';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { collection, onSnapshot, setDoc, doc } from 'firebase/firestore';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
-}
-
-// Crisp, production-grade custom SVG for a Three-Wheeled Bajaj vehicle
-function BajajIcon({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
-      strokeLinejoin="round" 
-      className={className}
-    >
-      <path d="M4 17h15V12H4z" />
-      <path d="M6 12V8l4-3h6a2 2 0 0 1 2 2v5" />
-      <circle cx="8" cy="18" r="2" />
-      <circle cx="15" cy="18" r="2" />
-      <circle cx="11" cy="6" r="1.2" />
-    </svg>
-  );
 }
 
 // Maps previously saved place emoji codes to high-fidelity Lucide elements for absolute backward-compatibility
@@ -311,14 +292,25 @@ export default function TripPlanner({
   const [calcDist, setCalcDist] = useState(5.5); // Default interactive distance in km
 
   // --- Community Route Verification States ---
-  const [upvotes, setUpvotes] = useState<Record<string, number>>(() => {
-    try {
-      const saved = localStorage.getItem('ttRouteUpvotes');
-      return saved ? JSON.parse(saved) : {};
-    } catch {
-      return {};
-    }
-  });
+  const [upvotes, setUpvotes] = useState<Record<string, number>>({});
+
+  // Subscribes to route verification upvotes in real-time
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, 'route_upvotes'), (snapshot) => {
+      const votes: Record<string, number> = {};
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data && typeof data.routeKey === 'string' && typeof data.votes === 'number') {
+          votes[data.routeKey] = data.votes;
+        }
+      });
+      setUpvotes(votes);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'route_upvotes');
+    });
+
+    return () => unsubscribe();
+  }, []);
   const [userVoted, setUserVoted] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('ttRouteUserVoted');
@@ -555,20 +547,24 @@ export default function TripPlanner({
   };
 
   // --- Interactive Upvote Route Verification ---
-  const upvoteRouteCode = (routeKey: string, e: React.MouseEvent) => {
+  const upvoteRouteCode = async (routeKey: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (userVoted.includes(routeKey)) return; // Only 1 vote allowed per user session
 
-    const updatedVotes = {
-      ...upvotes,
-      [routeKey]: (upvotes[routeKey] || Math.floor(Math.random() * 20 + 25)) + 1
-    };
+    const currentVotes = upvotes[routeKey] || 0;
+    const newVotes = currentVotes + 1;
+
+    try {
+      await setDoc(doc(db, 'route_upvotes', routeKey), {
+        routeKey,
+        votes: newVotes
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `route_upvotes/${routeKey}`);
+    }
+
     const updatedVotedList = [...userVoted, routeKey];
-    
-    setUpvotes(updatedVotes);
     setUserVoted(updatedVotedList);
-    
-    localStorage.setItem('ttRouteUpvotes', JSON.stringify(updatedVotes));
     localStorage.setItem('ttRouteUserVoted', JSON.stringify(updatedVotedList));
   };
 
@@ -659,19 +655,19 @@ export default function TripPlanner({
   // Dynamic Fare Tariff interactive calculator
   const dynamicCalculatedFare = useMemo(() => {
     const d = calcDist;
-    if (d <= 2.5) return { minibus: 10, Feres: 220, bajaj: 15 };
-    if (d <= 5.0) return { minibus: 15, Feres: 290, bajaj: 25 };
-    if (d <= 7.5) return { minibus: 20, Feres: 350, bajaj: 35 };
-    if (d <= 10.0) return { minibus: 25, Feres: 420, bajaj: 45 };
-    if (d <= 12.5) return { minibus: 30, Feres: 480, bajaj: 55 };
-    if (d <= 15.0) return { minibus: 35, Feres: 540, bajaj: 65 };
-    if (d <= 17.5) return { minibus: 40, Feres: 600, bajaj: 75 };
-    if (d <= 20.0) return { minibus: 45, Feres: 660, bajaj: 85 };
-    if (d <= 22.5) return { minibus: 50, Feres: 720, bajaj: 95 };
-    if (d <= 25.0) return { minibus: 55, Feres: 780, bajaj: 105 };
-    if (d <= 27.5) return { minibus: 60, Feres: 840, bajaj: 115 };
-    if (d <= 30.0) return { minibus: 65, Feres: 900, bajaj: 125 };
-    return { minibus: 70, Feres: 960, bajaj: 135 };
+    if (d <= 2.5) return { minibus: 10 };
+    if (d <= 5.0) return { minibus: 15 };
+    if (d <= 7.5) return { minibus: 20 };
+    if (d <= 10.0) return { minibus: 25 };
+    if (d <= 12.5) return { minibus: 30 };
+    if (d <= 15.0) return { minibus: 35 };
+    if (d <= 17.5) return { minibus: 40 };
+    if (d <= 20.0) return { minibus: 45 };
+    if (d <= 22.5) return { minibus: 50 };
+    if (d <= 25.0) return { minibus: 55 };
+    if (d <= 27.5) return { minibus: 60 };
+    if (d <= 30.0) return { minibus: 65 };
+    return { minibus: 70 };
   }, [calcDist]);
 
   return (
@@ -1281,8 +1277,8 @@ export default function TripPlanner({
 
             <p className="text-[10px] font-bold text-emerald-600 leading-normal -mt-1.5">
               {lang === 'en' 
-                ? 'Check official Addis Ababa Bureau of Transport minibus tariffs and average Bajaj share limits.'
-                : 'የአዲስ አበባ ከተማ ትራንስፖርት ቢሮ ይፋዊ ሚኒባስ ታሪፎችንና የጋራ የባጃጅ ዋጋዎችን ለማወቅ ርቀቱን ያንሸራትቱ።'}
+                ? 'Check official Addis Ababa Bureau of Transport minibus tariffs.'
+                : 'የአዲስ አበባ ከተማ ትራንስፖርት ቢሮ ይፋዊ ሚኒባስ ታሪፎችን ለማወቅ ርቀቱን ያንሸራትቱ።'}
             </p>
 
             {/* Slide Distance Input UI */}
@@ -1303,27 +1299,13 @@ export default function TripPlanner({
               />
 
               {/* Estimated grid results */}
-              <div className="grid grid-cols-3 gap-2 mt-1">
-                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-center flex flex-col items-center justify-center leading-none">
-                  <span className="p-1.5 bg-indigo-50 text-indigo-600 rounded-full mb-1 flex items-center justify-center">
-                    <Bus className="w-4 h-4 shrink-0" />
+              <div className="grid grid-cols-1 gap-2 mt-1">
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center flex flex-col items-center justify-center leading-none">
+                  <span className="p-2 bg-indigo-50 text-indigo-600 rounded-full mb-1.5 flex items-center justify-center">
+                    <Bus className="w-5 h-5 shrink-0" />
                   </span>
-                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter shrink-0">{lang === 'en' ? 'Minibus / Higer' : 'ሚኒባስ ታክሲ'}</span>
-                  <span className="text-xs font-black text-slate-800 mt-1">{dynamicCalculatedFare.minibus} {lang === 'en' ? 'ETB' : 'ብር'}</span>
-                </div>
-                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-center flex flex-col items-center justify-center leading-none">
-                  <span className="p-1.5 bg-amber-50 text-amber-600 rounded-full mb-1 flex items-center justify-center">
-                    <BajajIcon className="w-4 h-4 shrink-0" />
-                  </span>
-                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter shrink-0">{lang === 'en' ? 'Bajaj Share' : 'የጋራ ባጃጅ'}</span>
-                  <span className="text-xs font-black text-slate-800 mt-1">{dynamicCalculatedFare.bajaj} {lang === 'en' ? 'ETB' : 'ብር'}</span>
-                </div>
-                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-center flex flex-col items-center justify-center leading-none">
-                  <span className="p-1.5 bg-cyan-50 text-cyan-600 rounded-full mb-1 flex items-center justify-center">
-                    <Car className="w-4 h-4 shrink-0" />
-                  </span>
-                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter shrink-0">{lang === 'en' ? 'Ride Base / Feres' : 'ሪድ ወይም ፈረስ'}</span>
-                  <span className="text-xs font-black text-slate-800 mt-1">~{dynamicCalculatedFare.Feres} {lang === 'en' ? 'ETB' : 'ብር'}</span>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter shrink-0">{lang === 'en' ? 'Minibus / Higer' : 'ሚኒባስ ታክሲ'}</span>
+                  <span className="text-sm font-black text-slate-800 mt-1">{dynamicCalculatedFare.minibus} {lang === 'en' ? 'ETB' : 'ብር'}</span>
                 </div>
               </div>
             </div>
@@ -1485,7 +1467,7 @@ export default function TripPlanner({
 
             // Compute unique deterministic routing ID key
             const routeKey = path.legs.map(l => `${l.from}-${l.to}`).join('|');
-            const votesCount = upvotes[routeKey] || Math.floor(Math.sin(idx + 5) * 15 + 32);
+            const votesCount = upvotes[routeKey] || 0;
             const hasVoted = userVoted.includes(routeKey);
 
             return (

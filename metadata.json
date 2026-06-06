@@ -2,7 +2,10 @@
   "name": "Taxi Tera",
   "description": "Transit guide for Ethiopia with route planning and navigation.",
   "requestFramePermissions": [
-    "geolocation"
+    "geolocation",
+    "accelerometer",
+    "gyroscope",
+    "magnetometer"
   ],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

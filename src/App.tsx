@@ -16,7 +16,9 @@ import {
   Heart,
   MessageSquare,
   Car,
-  Flame
+  Flame,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { motion, AnimatePresence, useDragControls } from 'motion/react';
 import Map, { StationReport } from './components/Map';
@@ -30,6 +32,8 @@ import {
   COORDS
 } from './data/transitData';
 import { TripPath } from './lib/routing';
+import { db, handleFirestoreError, OperationType } from './lib/firebase';
+import { collection, query, orderBy, onSnapshot, setDoc, doc, deleteDoc } from 'firebase/firestore';
 
 import { twMerge } from 'tailwind-merge';
 import { clsx, type ClassValue } from 'clsx';
@@ -38,35 +42,11 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-// Crisp custom SVG icon for Bajaj three-wheelers
-function BajajIcon({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
-      strokeLinejoin="round" 
-      className={className}
-    >
-      <path d="M4 17h15V12H4z" />
-      <path d="M6 12V8l4-3h6a2 2 0 0 1 2 2v5" />
-      <circle cx="8" cy="18" r="2" />
-      <circle cx="15" cy="18" r="2" />
-      <circle cx="11" cy="6" r="1.2" />
-    </svg>
-  );
-}
-
 // Unified helper to render professional vehicle icons instead of prototype emojis
 function getVehicleIcon(type: string, className = "w-4 h-4") {
   switch (type) {
     case 'minibus':
       return <Bus className={className} />;
-    case 'bajaj':
-      return <BajajIcon className={className} />;
-    case 'ride':
     case 'car':
       return <Car className={className} />;
     default:
@@ -322,6 +302,36 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    const requestPermissionOnFirstInteraction = () => {
+      if (
+        typeof DeviceOrientationEvent !== 'undefined' &&
+        // @ts-ignore
+        typeof DeviceOrientationEvent.requestPermission === 'function'
+      ) {
+        // @ts-ignore
+        DeviceOrientationEvent.requestPermission()
+          .then((permissionState: string) => {
+            if (permissionState === 'granted') {
+              console.log('Compass permission granted.');
+            }
+          })
+          .catch(console.error);
+      }
+      
+      window.removeEventListener('click', requestPermissionOnFirstInteraction);
+      window.removeEventListener('touchend', requestPermissionOnFirstInteraction);
+    };
+
+    window.addEventListener('click', requestPermissionOnFirstInteraction);
+    window.addEventListener('touchend', requestPermissionOnFirstInteraction);
+
+    return () => {
+      window.removeEventListener('click', requestPermissionOnFirstInteraction);
+      window.removeEventListener('touchend', requestPermissionOnFirstInteraction);
+    };
+  }, []);
+
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
   const dragControls = useDragControls();
@@ -415,24 +425,25 @@ export default function App() {
   const [showFavsOnly, setShowFavsOnly] = useState(false);
 
   // Community reports for busy stations and pinned minibuses
-  const [reports, setReports] = useState<StationReport[]>(() => {
-    const saved = localStorage.getItem('ttReports');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved) as StationReport[];
-        // Filter out reports older than 5 hours (5hr * 60 * 60 * 1000 MS = 18000000)
-        // Also discard any previous placeholder seeds (IDs starting with 'rep-1', 'rep-2', etc.)
-        const fiveHoursAgo = Date.now() - 18000000;
-        return parsed.filter(report => 
-          report.timestamp > fiveHoursAgo && 
-          report.id.startsWith('rep-custom-')
-        );
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return [];
-  });
+  const [reports, setReports] = useState<StationReport[]>([]);
+
+  // Subscribes to shared transit reports from cloud Firestore in real-time
+  useEffect(() => {
+    const q = query(collection(db, 'reports'), orderBy('timestamp', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const list: StationReport[] = [];
+      snapshot.forEach((doc) => {
+        list.push(doc.data() as StationReport);
+      });
+      // Filter out reports older than 5 hours (5hr * 60 * 60 * 1000 MS = 18000000)
+      const fiveHoursAgo = Date.now() - 18000000;
+      setReports(list.filter(report => report.timestamp > fiveHoursAgo));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'reports');
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const [focusedReport, setFocusedReport] = useState<StationReport | null>(null);
   const [isPostingReport, setIsPostingReport] = useState(false);
@@ -440,11 +451,6 @@ export default function App() {
   const [newReportType, setNewReportType] = useState<'busy' | 'info' | 'minibus'>('busy');
   const [newReportStatus, setNewReportStatus] = useState<'critical' | 'moderate' | 'free' | 'info' | 'pinned'>('critical');
   const [newReportText, setNewReportText] = useState('');
-
-  // Persist reports
-  useEffect(() => {
-    localStorage.setItem('ttReports', JSON.stringify(reports));
-  }, [reports]);
 
   // Periodic Cleanup: Auto-delete reports older than 5 hours
   useEffect(() => {
@@ -615,7 +621,7 @@ export default function App() {
     setPanelHeight('collapsed');
   }, []);
 
-  const handlePostReport = () => {
+  const handlePostReport = async () => {
     const textToUse = newReportText.trim() || (
       newReportType === 'busy' 
         ? (lang === 'en' ? 'Station is crowded right now.' : 'ጣቢያው አሁን ላይ ተጨናንቋል።') 
@@ -639,7 +645,12 @@ export default function App() {
       location: stationCoords
     };
 
-    setReports(prev => [newReport, ...prev]);
+    try {
+      await setDoc(doc(db, 'reports', newReport.id), newReport);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `reports/${newReport.id}`);
+    }
+
     setIsPostingReport(false);
     setNewReportText('');
     
@@ -724,15 +735,10 @@ export default function App() {
     return (
       <div className="fixed inset-0 z-[9999] bg-slate-50 flex flex-col items-center justify-center p-6 font-sans select-none overflow-hidden relative">
         {/* Dynamic decorative warm light background gradients matching the main app / onboarding */}
-        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-cyan-500/10 via-amber-400/5 to-transparent pointer-events-none" />
+        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-cyan-500/12 via-amber-400/5 to-transparent pointer-events-none" />
 
-        {/* Textured image background, styled in a high-fidelity subtle fashion */}
-        <img 
-          src="/splash_screen.png" 
-          alt="Taxi Tera Splash" 
-          className="absolute inset-0 w-full h-full object-cover opacity-[0.05] mix-blend-multiply pointer-events-none"
-          referrerPolicy="no-referrer"
-        />
+        {/* High-fidelity CSS Grid pattern background instead of image logo */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(15,23,42,0.03)_1px,transparent_1px),linear-gradient(to_bottom,rgba(15,23,42,0.03)_1px,transparent_1px)] bg-[size:3rem_3rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] pointer-events-none" />
 
         {/* Floating Language selector toggle in top-right - matches app language toggle */}
         <div className="absolute top-6 right-6 flex items-center gap-2 z-50">
@@ -754,11 +760,12 @@ export default function App() {
           initial={{ opacity: 0, scale: 0.95, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-          className="w-full max-w-sm bg-white/95 backdrop-blur-xl border border-slate-200/50 rounded-[36px] p-8 sm:p-10 shadow-[0_32px_64px_-16px_rgba(15,23,42,0.1)] flex flex-col items-center relative z-10"
+          className="w-full max-w-sm bg-white/95 backdrop-blur-xl border border-slate-200/50 rounded-[36px] p-10 shadow-[0_32px_64px_-16px_rgba(15,23,42,0.1)] flex flex-col items-center relative z-10"
         >
-          {/* Brand Emblem (Taxi map pin) matching app branding exactly */}
-          <div className="scale-110 mb-2">
-            <BrandEmblem />
+          {/* Micro typographic category / visual anchor instead of a physical logo */}
+          <div className="flex items-center gap-2 px-3 py-1 bg-slate-100/80 rounded-full border border-slate-200/40 mb-6">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-[9px] font-black tracking-widest text-slate-500 uppercase">SYS_ONLINE</span>
           </div>
 
           <h1 className="text-3xl font-black text-slate-950 tracking-tighter select-none font-sans drop-shadow-sm flex flex-col items-center leading-none">
@@ -766,18 +773,18 @@ export default function App() {
             <span className="text-xs tracking-[0.25em] font-black text-slate-400 mt-2 uppercase font-sans">ታክሲ ተራ</span>
           </h1>
 
-          <p className="text-cyan-600 text-[10px] font-black uppercase tracking-widest mt-4 bg-cyan-50 border border-cyan-100/50 px-3.5 py-1.5 rounded-full text-center">
+          <p className="text-cyan-600 text-[10px] font-black uppercase tracking-widest mt-5 bg-cyan-50 border border-cyan-100/50 px-3.5 py-1.5 rounded-full text-center">
             {lang === 'en' ? 'Ethiopia Transit Guide' : 'የኢትዮጵያ የህዝብ ትራንስፖርት መመሪያ'}
           </p>
 
-          <p className="text-[11px] text-slate-500 font-medium leading-relaxed max-w-[280px] mt-4 mb-1 text-center">
+          <p className="text-[11px] text-slate-500 font-medium leading-relaxed max-w-[280px] mt-5 mb-1 text-center">
             {lang === 'en' 
               ? 'Loading highly detailed offline route systems, transit hubs, and schedules...'
               : 'የአዲስ አበባን የህዝብ ትራንስፖርት መስመሮችን እና ጣቢያዎችን በመጫን ላይ...'}
           </p>
 
           {/* Premium Animated Progress Loading Meter matching actual application aesthetics */}
-          <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden mt-7 border border-slate-200/30 relative">
+          <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden mt-8 border border-slate-200/30 relative">
             <motion.div 
               initial={{ width: "0%" }}
               animate={{ width: "100%" }}
@@ -787,7 +794,7 @@ export default function App() {
           </div>
 
           {/* Subtle loading label with beautiful pulsing dot animation */}
-          <div className="flex items-center gap-1.5 mt-4 text-slate-400">
+          <div className="flex items-center gap-1.5 mt-5 text-slate-400">
             <span className="text-[9px] uppercase font-black tracking-widest">
               {lang === 'en' ? 'Synchronizing maps' : 'ካርታዎችን በማዘጋጀት ላይ'}
             </span>
@@ -988,7 +995,7 @@ export default function App() {
               </button>
               <button 
                 onClick={() => setIsMenuOpen(true)}
-                className="w-9 h-9 bg-white/95 backdrop-blur-md rounded-full shadow-[0_4px_20px_rgba(0,0,0,0.06)] border border-slate-100 flex items-center justify-center text-slate-500 hover:text-primary active:scale-95 transition-all outline-none relative cursor-pointer"
+                className="w-9 h-9 bg-white/95 backdrop-blur-md rounded-full shadow-[0_4px_20px_rgba(0,0,0,0.06)] border border-slate-100 flex items-center justify-center text-slate-500 hover:text-amber-500 active:scale-95 transition-all outline-none relative cursor-pointer"
               >
                 <Menu className="w-4.5 h-4.5" />
                 {!isOffline && (
@@ -1288,14 +1295,12 @@ export default function App() {
           onPointerDownCapture={panelHeight === 'full' ? (e) => e.stopPropagation() : undefined}
           className="flex-1 overflow-y-auto px-4 py-1.5 scrollbar-hide pb-32"
         >
-          <AnimatePresence mode="wait" initial={false}>
             {activeTab === 'stations' ? (
               <motion.div 
                 key="stations"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
+                transition={{ duration: 0.12 }}
                 className="flex flex-col gap-6"
               >
                 {/* Major Stations (Only shown when viewing Favorites) */}
@@ -1375,8 +1380,7 @@ export default function App() {
                 key="trips"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
+                transition={{ duration: 0.12 }}
               >
                 <TripPlanner 
                   lang={lang} 
@@ -1393,8 +1397,7 @@ export default function App() {
                 key="messages"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 10 }}
-                transition={{ duration: 0.2 }}
+                transition={{ duration: 0.12 }}
                 className="flex flex-col gap-4 font-sans"
               >
                 {/* Header card with action */}
@@ -1576,9 +1579,9 @@ export default function App() {
                     return (
                       <motion.div 
                         key={`report-item-${report.id}`}
-                        layoutId={`report-card-${report.id}`}
-                        initial={{ opacity: 0, scale: 0.98 }}
-                        animate={{ opacity: 1, scale: 1 }}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.15 }}
                         className={cn(
                           "bg-white rounded-2xl border p-3 flex flex-col gap-2.5 transition-all relative group shadow-[0_2px_12px_rgba(15,23,42,0.015)] hover:shadow-[0_4px_20px_rgba(15,23,42,0.04)]",
                           report.type === 'busy' 
@@ -1627,9 +1630,13 @@ export default function App() {
                             
                             {/* Dismiss button */}
                             <button
-                              onClick={(e) => {
+                              onClick={async (e) => {
                                 e.stopPropagation();
-                                setReports(prev => prev.filter(r => r.id !== report.id));
+                                try {
+                                  await deleteDoc(doc(db, 'reports', report.id));
+                                } catch (error) {
+                                  console.error("Failed to delete report: ", error);
+                                }
                                 if (focusedReport?.id === report.id) {
                                   setFocusedReport(null);
                                 }
@@ -1702,7 +1709,6 @@ export default function App() {
                 </div>
               </motion.div>
             )}
-          </AnimatePresence>
         </div>
       </motion.div>
 
@@ -1741,24 +1747,13 @@ export default function App() {
               <div className="px-6 pt-3 pb-4 flex items-center justify-between shrink-0 border-b border-slate-50">
                 <div className="flex items-center gap-3.5 min-w-0">
                   {/* Glowing Transport Icon Box */}
-                  <div className={cn(
-                    "w-12 h-12 rounded-[18px] flex items-center justify-center shadow-sm shrink-0 border border-slate-100/50",
-                    selectedStation.t === 'minibus' 
-                      ? "bg-cyan-50 text-cyan-600" 
-                      : selectedStation.t === 'bajaj'
-                        ? "bg-amber-50 text-amber-600"
-                        : "bg-slate-50 text-slate-700"
-                  )}>
+                  <div className="w-12 h-12 rounded-[18px] flex items-center justify-center shadow-sm shrink-0 border border-slate-100/50 bg-cyan-50 text-cyan-600">
                     {getVehicleIcon(selectedStation.t, "w-5 h-5")}
                   </div>
 
                   <div className="flex flex-col min-w-0">
                     <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">
-                      {selectedStation.t === 'minibus' 
-                        ? (lang === 'en' ? 'Minibus Tera' : 'የሚኒባስ ተራ') 
-                        : selectedStation.t === 'bajaj'
-                          ? (lang === 'en' ? 'Bajaj Station' : 'የባጃጅ ጣቢያ')
-                          : (lang === 'en' ? 'Taxi Station' : 'የታክሲ ጣቢያ')}
+                      {lang === 'en' ? 'Minibus Tera' : 'የሚኒባስ ተራ'}
                     </span>
                     <h2 className="text-lg font-black text-slate-800 tracking-tight leading-snug truncate">
                       {lang === 'am' ? selectedStation.am : selectedStation.name}

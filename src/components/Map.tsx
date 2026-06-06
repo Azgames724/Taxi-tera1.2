@@ -420,38 +420,6 @@ const ReportMarker = memo(({ report, icon, onClick }: ReportMarkerProps) => {
   );
 });
 
-interface InteractiveLocationTrackerProps {
-  userLocation: [number, number] | null;
-  setHeading: (h: number) => void;
-  hasSensor: MutableRefObject<boolean>;
-  lastInteractionTime: MutableRefObject<number>;
-}
-
-const InteractiveLocationTracker = memo(({ userLocation, setHeading, hasSensor, lastInteractionTime }: InteractiveLocationTrackerProps) => {
-  useMapEvents({
-    mousemove: (e) => {
-      if (userLocation && !hasSensor.current) {
-        const userLat = userLocation[0];
-        const userLng = userLocation[1];
-        const mouseLat = e.latlng.lat;
-        const mouseLng = e.latlng.lng;
-        
-        const dLat = mouseLat - userLat;
-        const dLng = mouseLng - userLng;
-        
-        const angleRad = Math.atan2(dLng, dLat);
-        let angleDeg = (angleRad * 180) / Math.PI;
-        if (angleDeg < 0) {
-          angleDeg += 360;
-        }
-        
-        setHeading(angleDeg);
-        lastInteractionTime.current = Date.now();
-      }
-    }
-  });
-  return null;
-});
 
 const Map = memo(({ center, zoom, userLocation, activePath, onStationClick, lang, panelOpen, isOffline = false, plannerStart, plannerEnd, reports, onReportClick }: MapProps) => {
   const [heading, setHeading] = useState(0);
@@ -459,7 +427,9 @@ const Map = memo(({ center, zoom, userLocation, activePath, onStationClick, lang
   const lastInteractionTime = useRef(0);
 
   useEffect(() => {
-    let lastEventTime = 0;
+    let smoothDx = 0;
+    let smoothDy = 0;
+    let first = true;
 
     const handleOrientation = (e: DeviceOrientationEvent) => {
       let currentHeading = 0;
@@ -481,8 +451,31 @@ const Map = memo(({ center, zoom, userLocation, activePath, onStationClick, lang
 
       if (detected) {
         hasSensor.current = true;
-        lastEventTime = Date.now();
-        setHeading(currentHeading);
+        
+        // Convert to radians to compute unit vector
+        const rad = (currentHeading * Math.PI) / 180;
+        const dx = Math.sin(rad);     // 0 heading -> dx = 0, pointing up (North)
+        const dy = -Math.cos(rad);    // 0 heading -> dy = -1, pointing up (North)
+
+        if (first) {
+          smoothDx = dx;
+          smoothDy = dy;
+          first = false;
+        } else {
+          // Exponential moving average filter for buttery smooth yet highly responsive directional tracking
+          const smoothingFactor = 0.15; 
+          smoothDx = smoothDx + smoothingFactor * (dx - smoothDx);
+          smoothDy = smoothDy + smoothingFactor * (dy - smoothDy);
+        }
+
+        // Convert smoothed unit vector back to degrees
+        let smoothAngleRad = Math.atan2(smoothDx, -smoothDy);
+        let smoothAngleDeg = (smoothAngleRad * 180) / Math.PI;
+        if (smoothAngleDeg < 0) {
+          smoothAngleDeg += 360;
+        }
+
+        setHeading(smoothAngleDeg);
       }
     };
 
@@ -492,32 +485,12 @@ const Map = memo(({ center, zoom, userLocation, activePath, onStationClick, lang
       (window as any).addEventListener('deviceorientation', handleOrientation);
     }
 
-    // Gentle desktop fallback sweep
-    let animationFrameId: number;
-    let angle = 0;
-    const animate = () => {
-      const now = Date.now();
-      const noSensor = !hasSensor.current || (now - lastEventTime > 2500);
-      const noInteraction = now - lastInteractionTime.current > 2500;
-
-      if (noSensor && noInteraction) {
-        angle += 0.015;
-        // Sweeps fluidly centered around looking East-North-East
-        const sweep = 45 + Math.sin(angle) * 28;
-        setHeading(sweep);
-      }
-      animationFrameId = requestAnimationFrame(animate);
-    };
-
-    animationFrameId = requestAnimationFrame(animate);
-
     return () => {
       if ('ondeviceorientationabsolute' in (window as any)) {
         (window as any).removeEventListener('deviceorientationabsolute', handleOrientation);
       } else {
         (window as any).removeEventListener('deviceorientation', handleOrientation);
       }
-      cancelAnimationFrame(animationFrameId);
     };
   }, []);
 
@@ -617,7 +590,6 @@ const Map = memo(({ center, zoom, userLocation, activePath, onStationClick, lang
           </Fragment>
         )}
         
-        <InteractiveLocationTracker userLocation={userLocation} setHeading={setHeading} hasSensor={hasSensor} lastInteractionTime={lastInteractionTime} />
         
         {userLocation && (
           <Marker position={userLocation} icon={createUserIcon(heading)} zIndexOffset={3000} />

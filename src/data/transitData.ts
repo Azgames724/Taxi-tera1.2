@@ -7,7 +7,7 @@ export interface Station {
   id: number;
   name: string;
   am: string;
-  t: 'minibus' | 'bajaj' | 'ride';
+  t: 'minibus';
   lat: number;
   lng: number;
   addr: string;
@@ -28,15 +28,10 @@ export interface Route {
 export const STATIONS: Station[] = [
   {id:1,name:'Megenagna Minibus Hub',am:'መገናኛ ሚኒባስ ማዕከል',t:'minibus',lat:9.0272,lng:38.7678,addr:'Megenagna, Addis Ababa',addrAm:'መገናኛ፣ አዲስ አበባ',r:['Bole','Piassa','Merkato','Sarbet'],rat:4.6,h:['5:00–21:00','5:00–21:00','5:00–21:00','5:00–21:00','5:00–22:00','6:00–21:00','Closed']},
   {id:2,name:'Bole Atlas Station',am:'ቦሌ አትላስ ጣቢያ',t:'minibus',lat:8.9975,lng:38.7883,addr:'Bole Road, Addis Ababa',addrAm:'ቦሌ መንገድ፣ አዲስ አበባ',r:['Megenagna','Piassa','Stadium'],rat:4.4,h:['5:30–20:30','5:30–20:30','5:30–20:30','5:30–20:30','5:30–21:00','6:00–20:00','Closed']},
-  {id:3,name:'Piassa Bajaj Stop',am:'ፒያሳ ባጃጅ ቆሚ',t:'bajaj',lat:9.0352,lng:38.7517,addr:'Piassa, Addis Ababa',addrAm:'ፒያሳ፣ አዲስ አበባ',r:['Local routes','Merkato area'],rat:4.1,h:['6:00–20:00','6:00–20:00','6:00–20:00','6:00–20:00','6:00–20:00','7:00–18:00','7:00–16:00']},
   {id:4,name:'Mexico Square Stop',am:'ሜክሲኮ አደባባይ ቆሚ',t:'minibus',lat:9.0177,lng:38.7497,addr:'Mexico Square, Addis Ababa',addrAm:'ሜክሲኮ አደባባይ፣ አ.አ',r:['Piassa','Sarbet','Megenagna','4 Kilo'],rat:4.7,h:['5:00–21:30','5:00–21:30','5:00–21:30','5:00–21:30','5:00–22:00','5:30–21:00','6:00–19:00']},
   {id:5,name:'Sarbet Minibus Terminal',am:'ሰርቤት ሚኒባስ ተርሚናል',t:'minibus',lat:8.9979,lng:38.7577,addr:'Sarbet, Addis Ababa',addrAm:'ሰርቤት፣ አዲስ አበባ',r:['Mexico','CMC','Bole'],rat:4.3,h:['5:30–20:00','5:30–20:00','5:30–20:00','5:30–20:00','5:30–20:30','6:00–19:00','Closed']},
-  {id:6,name:'CMC Ride-hailing Zone',am:'ሲኤምሲ ሪድ ዞን',t:'ride',lat:9.0519,lng:38.8043,addr:'CMC Road, Addis Ababa',addrAm:'ሲኤምሲ፣ አዲስ አበባ',r:['Ride','FERES','Uber'],rat:4.8,h:['Open 24 hrs','Open 24 hrs','Open 24 hrs','Open 24 hrs','Open 24 hrs','Open 24 hrs','Open 24 hrs']},
-  {id:7,name:'Gotera Bajaj Terminal',am:'ጎተራ ባጃጅ ተርሚናል',t:'bajaj',lat:8.9889,lng:38.7693,addr:'Gotera, Addis Ababa',addrAm:'ጎተራ፣ አዲስ አበባ',r:['Akaki route','Sarbet route'],rat:3.9,h:['6:00–19:30','6:00–19:30','6:00–19:30','6:00–19:30','6:00–20:00','7:00–18:00','Closed']},
   {id:8,name:'Stadium Taxi Hub',am:'ስታዲዬም ታክሲ ሃብ',t:'minibus',lat:9.0220,lng:38.7523,addr:'Stadium, Addis Ababa',addrAm:'ስታዲዬም፣ አዲስ አበባ',r:['Piassa','Mexico','Bole','Arat Kilo'],rat:4.5,h:['5:00–21:00','5:00–21:00','5:00–21:00','5:00–21:00','5:00–21:30','5:30–20:30','6:00–18:00']},
-  {id:9,name:'Bole Ride Pickup',am:'ቦሌ ሪድ ፒካፕ',t:'ride',lat:9.0054,lng:38.7884,addr:'Bole Airport Area',addrAm:'ቦሌ አየር ማረፊያ',r:['Ride','FERES','Pickup'],rat:4.9,h:['Open 24 hrs','Open 24 hrs','Open 24 hrs','Open 24 hrs','Open 24 hrs','Open 24 hrs','Open 24 hrs']},
   {id:10,name:'4 Kilo Minibus Stop',am:'4 ኪሎ ሚኒባስ ቆሚ',t:'minibus',lat:9.0381,lng:38.7634,addr:'4 Kilo, Addis Ababa',addrAm:'4 ኪሎ፣ አዲስ አበባ',r:['Piassa','Arat Kilo','6 Kilo'],rat:4.2,h:['5:30–20:30','5:30–20:30','5:30–20:30','5:30–20:30','5:30–21:00','6:00–20:00','7:00–17:00']},
-  {id:11,name:'Merkato Bajaj Rank',am:'መርካቶ ባጃጅ ደረጃ',t:'bajaj',lat:9.0337,lng:38.7365,addr:'Merkato, Addis Ababa',addrAm:'መርካቶ፣ አዲስ አበባ',r:['Piassa','Gotera','Shabelle'],rat:4.0,h:['6:00–19:00','6:00–19:00','6:00–19:00','6:00–19:00','6:00–19:00','7:00–17:00','8:00–14:00']},
   {id:12,name:'Saris Minibus Station',am:'ሳሪስ ሚኒባስ ጣቢያ',t:'minibus',lat:8.9743,lng:38.7813,addr:'Saris, Addis Ababa',addrAm:'ሳሪስ፣ አዲስ አበባ',r:['Gotera','Kaliti','Akaki'],rat:4.1,h:['5:30–20:00','5:30–20:00','5:30–20:00','5:30–20:00','5:30–20:30','6:00–19:00','Closed']}
 ];
 
@@ -394,6 +389,6 @@ export const ROUTES: Route[] = [
 ];
 
 export const TRANSLATIONS = {
-  en:{spSub:'Find rides across Ethiopia — fast',ph:'Search stations or routes…',all:'All',minibus:'Minibus',bajaj:'Bajaj',ride:'Ride',saved:'Saved',stations:'Stations',routes:'Routes',planner:'Planner',nearTitle:'Stations',found:'found',tagline:'Your ride guide in Ethiopia',langSwitch:'Switch to አማርኛ',locOk:'📍 Location updated',locFail:'📍 Showing Addis Ababa',navStop:'🛑 Navigation stopped',approx:'⚠️ Showing approximate route',copied:'📋 Copied!',favAdd:'⭐ Saved!',favRm:'💔 Removed',today:'Today',noSt:'No stations found',noMatch:'No results found',closed:'Closed',open24:'Open 24 hrs'},
-  am:{spSub:'በኢትዮጵያ ታክሲ ፈልጉ — በፍጥነት',ph:'ጣቢያ ወይም መስመር ፈልግ…',all:'ሁሉም',minibus:'ሚኒባስ',bajaj:'ባጃጅ',ride:'ሪድ',saved:'የተቀመጡ',stations:'ጣቢያዎች',routes:'መስመሮች',planner:'ጉዞ አቅድ',nearTitle:'ጣቢያዎች',found:'ተገኝቷል',tagline:'የእርስዎ ታክሲ መመሪያ',langSwitch:'Switch to English',locOk:'📍 አካባቢ ተዘምኗል',locFail:'📍 አዲስ አበባ ማዕከል',navStop:'🛑 ማሰሻ ቆሟል',approx:'⚠️ ግምታዊ መስመር',copied:'📋 ተቀድቷል!',favAdd:'⭐ ተቀምጧል!',favRm:'💔 ተወግዷል',today:'ዛሬ',noSt:'ጣቢያ አልተገኘም',noMatch:'ምንም አልተገኘም',closed:'ተዘግቷል',open24:'24 ሰዓት ክፍት'}
+  en:{spSub:'Find transit across Ethiopia — fast',ph:'Search stations or routes…',all:'All',minibus:'Minibus',saved:'Saved',stations:'Stations',routes:'Routes',planner:'Planner',nearTitle:'Stations',found:'found',tagline:'Your transit guide in Ethiopia',langSwitch:'Switch to አማርኛ',locOk:'📍 Location updated',locFail:'📍 Showing Addis Ababa',navStop:'🛑 Navigation stopped',approx:'⚠️ Showing approximate route',copied:'📋 Copied!',favAdd:'⭐ Saved!',favRm:'💔 Removed',today:'Today',noSt:'No stations found',noMatch:'No results found',closed:'Closed',open24:'Open 24 hrs'},
+  am:{spSub:'በኢትዮጵያ ታክሲ ፈልጉ — በፍጥነት',ph:'ጣቢያ ወይም መስመር ፈልግ…',all:'ሁሉም',minibus:'ሚኒባስ',saved:'የተቀመጡ',stations:'ጣቢያዎች',routes:'መስመሮች',planner:'ጉዞ አቅድ',nearTitle:'ጣቢያዎች',found:'ተገኝቷል',tagline:'የእርስዎ ታክሲ መመሪያ',langSwitch:'Switch to English',locOk:'📍 አካባቢ ተዘምኗል',locFail:'📍 አዲስ አበባ ማዕከል',navStop:'🛑 ማሰሻ ቆሟል',approx:'⚠️ ግምታዊ መስመር',copied:'📋 ተቀድቷል!',favAdd:'⭐ ተቀምጧል!',favRm:'💔 ተወግዷል',today:'ዛሬ',noSt:'ጣቢያ አልተገኘም',noMatch:'ምንም አልተገኘም',closed:'ተዘግቷል',open24:'24 ሰዓት ክፍት'}
 };
