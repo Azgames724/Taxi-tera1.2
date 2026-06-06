@@ -15,11 +15,11 @@ const envFirebaseConfig = {
 };
 
 const hasEnvConfig = !!(envFirebaseConfig.projectId && envFirebaseConfig.apiKey);
-const firebaseConfig = hasEnvConfig ? envFirebaseConfig : localFirebaseConfig;
+const firebaseConfig = hasEnvConfig ? envFirebaseConfig : (localFirebaseConfig as any);
 
 const app = initializeApp(firebaseConfig);
 // Fallback path in case firestoreDatabaseId isn't explicitly configured or loaded
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId || undefined);
+export const db = getFirestore(app, (firebaseConfig as any).firestoreDatabaseId || undefined);
 export const auth = getAuth();
 
 export enum OperationType {
