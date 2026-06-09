@@ -1,7 +1,21 @@
-![React](https://img.shields.io/badge/React-19-61DAFB)
-![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6)
-![Firebase](https://img.shields.io/badge/Firebase-Firestore-FFCA28)
-![Leaflet](https://img.shields.io/badge/Leaflet-Mapping-199900)
-![OpenStreetMap](https://img.shields.io/badge/OpenStreetMap-Data-7EBC6F)
-![Status](https://img.shields.io/badge/Status-Active%20Development-success)
-![Taxi Tera](https://img.shields.io/badge/Taxi_Tera-Ethiopian_Transit-blue)
+# Taxi Tera
+
+> Interactive public transportation mapping platform for Ethiopia.
+
+<p align="center">
+  <img src="./assets/banner.png" alt="Taxi Tera Banner">
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/github/stars/Azgames724/Taxi-tera1.2?style=for-the-badge">
+  <img src="https://img.shields.io/github/license/Azgames724/Taxi-tera1.2?style=for-the-badge">
+  <img src="https://img.shields.io/badge/Status-Active-success?style=for-the-badge">
+</p>
+
+<p align="center">
+  <a href="https://taxi-tera1-2-vfa9.vercel.app/">Live Demo</a>
+  ·
+  <a href="#features">Features</a>
+  ·
+  <a href="#roadmap">Roadmap</a>
+</p>
