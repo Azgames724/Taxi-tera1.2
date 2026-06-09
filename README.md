@@ -1,72 +1,53 @@
-# 🚖 Taxi Tera (ታክሲ ተራ)
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Azgames724/Taxi-tera1.2/main/Picsart_26-06-09_20-32-03-314.png" width="100%">
+</p>
+
+<h1 align="center">🚖 Taxi Tera</h1>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Azgames724/Taxi-tera1.2/main/Picsart_26-06-09_20-32-03-314.png" width="100%" alt="Taxi Tera Banner">
+Interactive Public Transportation Mapping Platform for Ethiopia
 </p>
 
 <p align="center">
-  <strong>Interactive public transportation mapping platform for Ethiopia.</strong>
+  <img src="https://img.shields.io/github/stars/Azgames724/Taxi-tera1.2?style=for-the-badge">
+  <img src="https://img.shields.io/github/forks/Azgames724/Taxi-tera1.2?style=for-the-badge">
+  <img src="https://img.shields.io/badge/License-Apache%202.0-green?style=for-the-badge">
+  <img src="https://img.shields.io/badge/Status-Active-success?style=for-the-badge">
+  <img src="https://img.shields.io/badge/Deploy-Vercel-black?style=for-the-badge">
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/github/stars/Azgames724/Taxi-tera1.2?style=for-the-badge" alt="Stars">
-  <img src="https://img.shields.io/github/license/Azgames724/Taxi-tera1.2?style=for-the-badge" alt="License">
-  <img src="https://img.shields.io/badge/Status-Active-success?style=for-the-badge" alt="Status">
-</p>
-
-<p align="center">
-  <a href="https://taxi-tera1-2-vfa9.vercel.app/">🚀 Live Demo</a> • 
-  <a href="#features">✨ Features</a> • 
-  <a href="#tech-stack">⚙️ Tech Stack</a> • 
-  <a href="#installation">📦 Installation</a> • 
-  <a href="#roadmap">🛣️ Roadmap</a>
+  <a href="#overview">Overview</a> •
+  <a href="#features">Features</a> •
+  <a href="#tech-stack">Tech Stack</a> •
+  <a href="#installation">Installation</a> •
+  <a href="#roadmap">Roadmap</a>
 </p>
 
 ---
 
-## 🌍 Overview
-
-Taxi Tera (ታክሲ ተራ) is a **geospatial transit intelligence platform** that maps and organizes Ethiopia’s public transportation system. It transforms scattered transport data into a **structured, searchable, and interactive map experience**.
-
----
-
-## ✨ Features
+## 📖 Overview
 
 <table>
 <tr>
-<td>
+<td width="50%">
 
-### 🗺️ Map Intelligence
-- **Interactive Map:** High-performance Leaflet map interface.
-- **OpenStreetMap:** Integrated open-source geographic data.
-- **Location Clustering:** Organized markers for better readability.
+Taxi Tera (ታክሲ ተራ) is a geospatial transit platform helping users discover taxi ranks, bus stations and transportation routes throughout Ethiopia.
 
-</td>
-<td>
-
-### 🚖 Transit Data
-- **Taxi Ranks:** Fast discovery of nearby regional taxi ranks.
-- **Bus Stations:** Complete database of operational city terminals.
-- **Transport Hubs:** Accurate indexing of commuter hubs.
+Built with modern web technologies and designed for mobile-first experiences.
 
 </td>
-</tr>
 
-<tr>
-<td>
+<td width="50%">
 
-### 🔍 Smart Search
-- **Station Lookup:** Quick search functions for specific routes.
-- **Destination Finder:** Find endpoints easily on the map canvas.
-- **Fast Filtering Engine:** Instantly isolate relevant transit nodes.
+### ✨ Highlights
 
-</td>
-<td>
-
-### 📱 User Experience
-- **Mobile-First Design:** Fluid, responsive layouts for small screens.
-- **Fast Loading UI:** Minimal overhead optimized for performance.
-- **Clean Interface:** Modern typography and intuitive components.
+- Interactive Mapping
+- Taxi Rank Discovery
+- Bus Station Database
+- Smart Search
+- Navigation Tools
+- Offline Support
 
 </td>
 </tr>
@@ -74,39 +55,65 @@ Taxi Tera (ታክሲ ተራ) is a **geospatial transit intelligence platform** t
 
 ---
 
-## ⚙️ Tech Stack
+## ✨ Features
+
+<table>
+<tr>
+<td>🗺️ <b>Interactive Map</b><br>Explore transport locations visually</td>
+<td>🚖 <b>Taxi Ranks</b><br>Find nearby taxi stations</td>
+<td>🚌 <b>Bus Stations</b><br>Discover transport hubs</td>
+</tr>
+
+<tr>
+<td>🔍 <b>Smart Search</b><br>Search routes and stations</td>
+<td>🧭 <b>Navigation</b><br>Plan your journey</td>
+<td>📱 <b>Mobile Friendly</b><br>Optimized for all devices</td>
+</tr>
+</table>
+
+---
+
+## 🛠 Tech Stack
+
+<table>
+<tr>
+<td>⚛️ React</td>
+<td>🔷 TypeScript</td>
+<td>⚡ Vite</td>
+</tr>
+
+<tr>
+<td>🔥 Firebase</td>
+<td>🗺 Leaflet</td>
+<td>🌍 OpenStreetMap</td>
+</tr>
+
+<tr>
+<td>🎨 Tailwind CSS</td>
+<td>🐻 Zustand</td>
+<td>▲ Vercel</td>
+</tr>
+</table>
+
+---
+
+## 📸 Screenshots
 
 <p align="center">
-  <img src="https://img.shields.io/badge/React-Frontend-61DAFB?style=for-the-badge" alt="React">
-  <img src="https://img.shields.io/badge/TypeScript-Language-3178C6?style=for-the-badge" alt="TypeScript">
-  <img src="https://img.shields.io/badge/Vite-Bundler-646CFF?style=for-the-badge" alt="Vite">
-  <img src="https://img.shields.io/badge/Firebase-Backend-FFCA28?style=for-the-badge" alt="Firebase">
-  <img src="https://img.shields.io/badge/Leaflet-Maps-199900?style=for-the-badge" alt="Leaflet">
-  <img src="https://img.shields.io/badge/OpenStreetMap-Data-7EBC6F?style=for-the-badge" alt="OpenStreetMap">
-  <img src="https://img.shields.io/badge/Vercel-Deploy-000000?style=for-the-badge" alt="Vercel">
+  <img src="YOUR_SCREENSHOT_1" width="30%">
+  <img src="YOUR_SCREENSHOT_2" width="30%">
+  <img src="YOUR_SCREENSHOT_3" width="30%">
 </p>
 
 ---
 
-## 📸 Preview
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/Azgames724/Taxi-tera1.2/main/assets/screenshot.png" width="90%" alt="Application Preview Screenshot">
-</p>
-
----
-
-## 📦 Installation
-
-Get your development environment set up locally in just a few steps:
+## 🚀 Installation
 
 ```bash
-# Clone the repository
-git clone [https://github.com/Azgames724/Taxi-tera1.2.git](https://github.com/Azgames724/Taxi-tera1.2.git)
+git clone https://github.com/Azgames724/Taxi-tera1.2.git
+
 cd Taxi-tera1.2
 
-# Install dependencies
 npm install
 
-# Start development server
 npm run dev
