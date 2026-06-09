@@ -430,6 +430,8 @@ const Map = memo(({ center, zoom, userLocation, activePath, onStationClick, lang
     let smoothDx = 0;
     let smoothDy = 0;
     let first = true;
+    let lastHeading = 0;
+    let lastTime = 0;
 
     const handleOrientation = (e: DeviceOrientationEvent) => {
       let currentHeading = 0;
@@ -475,7 +477,14 @@ const Map = memo(({ center, zoom, userLocation, activePath, onStationClick, lang
           smoothAngleDeg += 360;
         }
 
-        setHeading(smoothAngleDeg);
+        const now = Date.now();
+        const diffAngle = Math.abs(smoothAngleDeg - lastHeading);
+        const shortestDiff = Math.min(diffAngle, 360 - diffAngle);
+        if (now - lastTime > 150 && shortestDiff > 3) {
+          setHeading(smoothAngleDeg);
+          lastHeading = smoothAngleDeg;
+          lastTime = now;
+        }
       }
     };
 

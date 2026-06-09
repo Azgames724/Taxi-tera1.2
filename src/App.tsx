@@ -32,7 +32,7 @@ import {
   COORDS
 } from './data/transitData';
 import { TripPath } from './lib/routing';
-import { db, handleFirestoreError, OperationType } from './lib/firebase';
+import { db, handleFirestoreError, OperationType, isFirebaseConfigured } from './lib/firebase';
 import { collection, query, orderBy, onSnapshot, setDoc, doc, deleteDoc } from 'firebase/firestore';
 
 import { twMerge } from 'tailwind-merge';
@@ -397,7 +397,13 @@ export default function App() {
   }, []);
 
   const [favorites, setFavorites] = useState<number[]>(() => {
-    return JSON.parse(localStorage.getItem('ttFavs') || '[]');
+    try {
+      const saved = localStorage.getItem('ttFavs');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error("Failed to parse ttFavs from localStorage", e);
+      return [];
+    }
   });
   const [isOffline, setIsOffline] = useState(() => {
     const forced = localStorage.getItem('forceOffline');
@@ -427,8 +433,25 @@ export default function App() {
   // Community reports for busy stations and pinned minibuses
   const [reports, setReports] = useState<StationReport[]>([]);
 
-  // Subscribes to shared transit reports from cloud Firestore in real-time
+  // Subscribes to shared transit reports from cloud Firestore in real-time or localStorage fallback
   useEffect(() => {
+    if (!isFirebaseConfigured) {
+      const loadLocalReports = () => {
+        try {
+          const stored = localStorage.getItem('taxi_tera_local_reports');
+          const list: StationReport[] = stored ? JSON.parse(stored) : [];
+          const fiveHoursAgo = Date.now() - 18000000;
+          setReports(list.filter(report => report.timestamp > fiveHoursAgo));
+        } catch (e) {
+          console.error("Failed to load local reports", e);
+        }
+      };
+      loadLocalReports();
+      // Poll or watch storage events so that multiple tabs / actions can see updates
+      const interval = setInterval(loadLocalReports, 4000);
+      return () => clearInterval(interval);
+    }
+
     const q = query(collection(db, 'reports'), orderBy('timestamp', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const list: StationReport[] = [];
@@ -518,6 +541,30 @@ export default function App() {
       setPanelHeight('collapsed');
     }
   }, [panelOpen]);
+
+  const allReportingStations = useMemo(() => {
+    const mapUnique: Record<string, string> = {};
+    
+    // 1. Add STATIONS
+    STATIONS.forEach((st) => {
+      mapUnique[st.name] = lang === 'am' ? st.am : st.name;
+    });
+    
+    // 2. Add keys of COORDS
+    Object.keys(COORDS).forEach((name) => {
+      if (!(name in mapUnique)) {
+        const isRepresented = STATIONS.some(st => 
+          st.name.toLowerCase().trim() === name.toLowerCase().trim()
+        );
+        if (!isRepresented) {
+          mapUnique[name] = name;
+        }
+      }
+    });
+    
+    return Object.entries(mapUnique).map(([name, label]) => ({ name, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [lang]);
 
   const t = TRANSLATIONS[lang];
 
@@ -645,10 +692,22 @@ export default function App() {
       location: stationCoords
     };
 
-    try {
-      await setDoc(doc(db, 'reports', newReport.id), newReport);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `reports/${newReport.id}`);
+    if (!isFirebaseConfigured) {
+      try {
+        const stored = localStorage.getItem('taxi_tera_local_reports');
+        const list: StationReport[] = stored ? JSON.parse(stored) : [];
+        list.unshift(newReport);
+        localStorage.setItem('taxi_tera_local_reports', JSON.stringify(list));
+        setReports(list);
+      } catch (e) {
+        console.error("Local storage error:", e);
+      }
+    } else {
+      try {
+        await setDoc(doc(db, 'reports', newReport.id), newReport);
+      } catch (error) {
+        handleFirestoreError(error, OperationType.WRITE, `reports/${newReport.id}`);
+      }
     }
 
     setIsPostingReport(false);
@@ -1455,9 +1514,9 @@ export default function App() {
                           onChange={(e) => setNewReportStation(e.target.value)}
                           className="w-full bg-white border border-slate-200 text-xs font-bold text-slate-800 rounded-xl p-2.5 outline-none focus:border-slate-800 transition-colors"
                         >
-                          {STATIONS.map((st) => (
-                            <option key={`st-sel-${st.id}`} value={st.name}>
-                              {lang === 'am' ? st.am : st.name}
+                          {allReportingStations.map((st) => (
+                            <option key={`st-sel-${st.name}`} value={st.name}>
+                              {st.label}
                             </option>
                           ))}
                         </select>
@@ -1632,10 +1691,22 @@ export default function App() {
                             <button
                               onClick={async (e) => {
                                 e.stopPropagation();
-                                try {
-                                  await deleteDoc(doc(db, 'reports', report.id));
-                                } catch (error) {
-                                  console.error("Failed to delete report: ", error);
+                                if (!isFirebaseConfigured) {
+                                  try {
+                                    const stored = localStorage.getItem('taxi_tera_local_reports');
+                                    let list: StationReport[] = stored ? JSON.parse(stored) : [];
+                                    list = list.filter(r => r.id !== report.id);
+                                    localStorage.setItem('taxi_tera_local_reports', JSON.stringify(list));
+                                    setReports(list);
+                                  } catch (error) {
+                                    console.error("Failed to delete local report: ", error);
+                                  }
+                                } else {
+                                  try {
+                                    await deleteDoc(doc(db, 'reports', report.id));
+                                  } catch (error) {
+                                    console.error("Failed to delete report: ", error);
+                                  }
                                 }
                                 if (focusedReport?.id === report.id) {
                                   setFocusedReport(null);
@@ -1920,17 +1991,30 @@ export default function App() {
 
               <div className="flex flex-col gap-2">
                 {[
-                  { icon: Bus, label: lang === 'en' ? 'Stations' : 'ጣቢያዎች', id: 'stations' },
-                  { icon: Navigation, label: lang === 'en' ? 'Trip Planner' : 'ጉዞ አቅድ', id: 'trips' },
-                  { icon: Star, label: lang === 'en' ? 'Favorites' : 'ተወዳጆች', id: 'favs' },
-                  { icon: Heart, label: lang === 'en' ? 'Support Developer' : 'ለአልሚው ድጋፍ ያድርጉ', id: 'support' },
-                  { icon: Info, label: lang === 'en' ? 'About App' : 'ስለ መተግበሪያው', id: 'about' }
+                  { icon: Bus, label: lang === 'en' ? 'Stations & Teras' : 'ጣቢያዎችና ተራዎች', id: 'stations' },
+                  { icon: Navigation, label: lang === 'en' ? 'Trip Route Planner' : 'የጉዞ መስመር አቅድ', id: 'trips' },
+                  { icon: Star, label: lang === 'en' ? 'Favorites / Saved' : 'የተቀመጡ ተወዳጆች', id: 'favs' },
+                  { icon: Heart, label: lang === 'en' ? 'Support Abenezer' : 'አጋርነት ለአልሚው', id: 'support' },
+                  { icon: Info, label: lang === 'en' ? 'About Taxi Tera' : 'ስለ ታክሲ ተራ', id: 'about' }
                 ].map((item) => (
                   <button 
                     key={item.id}
                     onClick={() => {
-                      if (item.id === 'stations' || item.id === 'trips') {
-                        setActiveTab(item.id as any);
+                      if (item.id === 'stations') {
+                        setActiveTab('stations');
+                        setShowFavsOnly(false);
+                        setPanelHeight('expanded');
+                        setPanelOpen(true);
+                        setIsMenuOpen(false);
+                      } else if (item.id === 'trips') {
+                        setActiveTab('trips');
+                        setPanelHeight('expanded');
+                        setPanelOpen(true);
+                        setIsMenuOpen(false);
+                      } else if (item.id === 'favs') {
+                        setShowFavsOnly(true);
+                        setActiveTab('stations');
+                        setPanelHeight('expanded');
                         setPanelOpen(true);
                         setIsMenuOpen(false);
                       } else if (item.id === 'about') {
@@ -2018,54 +2102,54 @@ export default function App() {
                 <h2 className="text-2xl font-black text-slate-950 tracking-tighter leading-none mt-1">TAXI TERA</h2>
                 <span className="text-[10px] tracking-[0.25em] font-black text-slate-400 mt-1.5 uppercase">ታክሲ ተራ</span>
                 
-                <p className="text-neutral-500 text-[10px] font-bold uppercase tracking-widest mt-3.5 px-3 py-1 bg-slate-50 border border-slate-100 rounded-full">
-                  {lang === 'en' ? 'Ethiopia Transit Guide' : 'የኢትዮጵያ የህዝብ ትራንስፖርት መመሪያ'}
+                <p className="text-primary text-[9px] font-black uppercase tracking-widest mt-3.5 px-3 py-1 bg-amber-50 border border-amber-100 rounded-full">
+                  {lang === 'en' ? 'Addis Ababa Digital Transit Guide' : 'የአዲስ አበባ ዲጂታል የጉዞ መመሪያ'}
                 </p>
               </div>
               
-              <div className="flex-1 overflow-y-auto my-4 pr-1 space-y-4 max-h-[40vh] text-slate-600 font-sans custom-scrollbar">
+              <div className="flex-1 overflow-y-auto my-4 pr-1 space-y-4 max-h-[42vh] text-slate-600 font-sans custom-scrollbar">
                 <section className="bg-slate-50/60 p-3.5 rounded-2xl border border-slate-100/50">
                   <h3 className="font-extrabold text-xs text-slate-900 mb-1 uppercase tracking-wider flex items-center gap-1.5">
-                    <span className="text-amber-500">🎯</span>
-                    {lang === 'en' ? 'Get from Point A to B' : 'ከመነሻ እስከ መድረሻ'}
+                    <span className="text-amber-500">🗺️</span>
+                    {lang === 'en' ? 'Intelligent Route Planner' : 'ብልጥ የጉዞ አቅጣጫ'}
                   </h3>
-                  <p className="text-[11px] leading-relaxed font-medium text-slate-500">
+                  <p className="text-[11px] leading-relaxed font-semibold text-slate-500">
                     {lang === 'en' 
-                      ? "Taxi Tera offers smooth, intuitive solutions to help you travel from Point A to Point B across the city effortlessly. Explore multiple dynamic route options and find your best journey instantly."
-                      : "ታክሲ ተራ ከቦታ ቦታ (ከመነሻ እስከ መድረሻ) ቀልጣፋ በሆነ መንገድ ለመጓዝ የሚረዳ የአቅጣጫ መመሪያዎ ነው። በርካታ አማራጭ መስመሮችን በማቅረብ ሁሌም ቀላሉን መንገድ እንዲመርጡ ያስችልዎታል።"}
+                      ? "Find the most optimal routes connecting any two major points, intersection grids, or taxi terminals ('teras') across Addis Ababa. View distances, expected transfer paths, and accurate per-segment tariffs."
+                      : "አዲስ አበባ ውስጥ ከማንኛውም ቦታ ወደፈለጉት መዳረሻ የሚያደርሱ ምርጥ የህዝብ ትራንስፖርት አማራጮችን ያግኙ። ርቀትን፣ የሚደረጉ ዝውውሮችን እና አጠቃላይ የጉዞ ዋጋን ዝርዝር መረጃ ያያሉ።"}
                   </p>
                 </section>
                 
                 <section className="bg-slate-50/60 p-3.5 rounded-2xl border border-slate-100/50">
                   <h3 className="font-extrabold text-xs text-slate-900 mb-1 uppercase tracking-wider flex items-center gap-1.5">
-                    <span className="text-cyan-500">🗺️</span>
-                    {lang === 'en' ? 'Station Locations' : 'የጣቢያዎች መገኛ'}
+                    <span className="text-sky-500">📍</span>
+                    {lang === 'en' ? 'Verified Station Directory' : 'የጣቢያዎችና ተራዎች ማውጫ'}
                   </h3>
-                  <p className="text-[11px] leading-relaxed font-medium text-slate-500">
+                  <p className="text-[11px] leading-relaxed font-semibold text-slate-500">
                     {lang === 'en'
-                      ? "Easily find and discover exactly where key transit hubs and station platforms are situated on the street map. Say goodbye to guesswork and navigate city transfers confidently."
-                      : "በከተማዋ ባሉ ምቹ ካርታዎች ላይ ዋና ዋና የመጓጓዣ ጣቢያዎችን እና የመሰብሰቢያ ቦታዎችን በቀላሉ ያግኙ።"}
+                      ? "Explore verified exact geographic locations, street coordinates, and detailed operational structures of major minibus tera networks. Perfect for commuters, tourists, and daily travelers."
+                      : "የከተማዋን ዋና ዋና የሚኒባስ ተራዎች እና መቆሚያዎችን ትክክለኛ መገኛ ካርታ ላይ ያግኙ። ለአካባቢው ተጠቃሚዎችም ሆነ ለአዲስ ጎብኝዎች ጉዞን እጅግ ቀላል ያደርጋል።"}
                   </p>
                 </section>
 
                 <section className="bg-slate-50/60 p-3.5 rounded-2xl border border-slate-100/50">
                   <h3 className="font-extrabold text-xs text-slate-900 mb-1 uppercase tracking-wider flex items-center gap-1.5">
                     <span className="text-emerald-500">👥</span>
-                    {lang === 'en' ? 'Commuter Crowd Reports' : 'የመንገድ ላይ መረጃዎች'}
+                    {lang === 'en' ? 'Live Crowdsourcing' : 'የቀጥታ መንገድ ላይ መረጃ'}
                   </h3>
-                  <p className="text-[11px] leading-relaxed font-medium text-slate-500">
+                  <p className="text-[11px] leading-relaxed font-semibold text-slate-500">
                     {lang === 'en'
-                      ? "Connect and coordinate with other live commuters in real time. Share crowd-sourced updates to let fellow travelers know if roads are busy or if there are blockages or problems with specific lanes."
-                      : "ከሌሎች ተጓዦች ጋር በመገናኘት የመንገዶችን መጨናነቅ እና ልዩ ልዩ የመንገድ ላይ ሁኔታዎችን በእውነተኛ ጊዜ መጋራት እና ማየት ይችላሉ።"}
+                      ? "Empowered by the community. View and pin real-time crowd alerts, minibus updates, line blockages, or queuing times directly in the live transit feed, helping the city bypass delays together."
+                      : "በህብረተሰቡ የተደገፈ። በጣቢያዎች ላይ ያለውን የሰልፍ ርዝመትና መጨናነቅን እንዲሁም የሚኒባስ ታክሲዎችን መገኘት በተመለከተ መረጃዎችን ከመረቡ ያጋሩ፣ የቀጥታ መረጃዎችንም ይከታተሉ።"}
                   </p>
                 </section>
 
                 <div className="pt-2 flex flex-col items-center gap-1 border-t border-slate-100/80">
-                  <div className="text-[10px] text-cyan-600 font-black uppercase tracking-wider">
-                    {lang === 'en' ? 'Designed & Developed by Abenezer' : 'የበለፀገውና የተነደፈው በአበነዘር ነው'}
+                  <div className="text-[10px] text-indigo-600 font-black uppercase tracking-wider">
+                    {lang === 'en' ? 'Designed & Developed by Abenezer' : 'የተነደፈውና የበለፀገው በአበነዘር ነው'}
                   </div>
                   <div className="text-[8px] text-slate-400 font-mono uppercase tracking-widest">
-                    v1.0.4 • Addis Ababa, Ethiopia
+                    v1.0.5 • Addis Ababa, Ethiopia
                   </div>
                 </div>
               </div>

@@ -42,12 +42,14 @@ import {
   Bus,
   Car,
   Smartphone,
-  MessageSquare
+  MessageSquare,
+  Clock,
+  Calendar
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { COORDS, TRANSLATIONS, Station, STATIONS } from '../data/transitData';
 import { findTripPaths, TripPath, enhancePathWithGeometry } from '../lib/routing';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType, isFirebaseConfigured } from '../lib/firebase';
 import { collection, onSnapshot, setDoc, doc } from 'firebase/firestore';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -294,8 +296,24 @@ export default function TripPlanner({
   // --- Community Route Verification States ---
   const [upvotes, setUpvotes] = useState<Record<string, number>>({});
 
-  // Subscribes to route verification upvotes in real-time
+  // Subscribes to route verification upvotes in real-time or localStorage fallback
   useEffect(() => {
+    if (!isFirebaseConfigured) {
+      const loadLocalUpvotes = () => {
+        try {
+          const stored = localStorage.getItem('tt_local_route_upvotes');
+          const votes: Record<string, number> = stored ? JSON.parse(stored) : {};
+          setUpvotes(votes);
+        } catch (e) {
+          console.error("Failed to load local upvotes", e);
+        }
+      };
+      loadLocalUpvotes();
+      // Poll storage fallback so that other tabs/actions mirror instantly
+      const interval = setInterval(loadLocalUpvotes, 4000);
+      return () => clearInterval(interval);
+    }
+
     const unsubscribe = onSnapshot(collection(db, 'route_upvotes'), (snapshot) => {
       const votes: Record<string, number> = {};
       snapshot.forEach((doc) => {
@@ -554,13 +572,24 @@ export default function TripPlanner({
     const currentVotes = upvotes[routeKey] || 0;
     const newVotes = currentVotes + 1;
 
-    try {
-      await setDoc(doc(db, 'route_upvotes', routeKey), {
-        routeKey,
-        votes: newVotes
-      });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `route_upvotes/${routeKey}`);
+    const newUpvotes = { ...upvotes, [routeKey]: newVotes };
+    setUpvotes(newUpvotes);
+
+    if (!isFirebaseConfigured) {
+      try {
+        localStorage.setItem('tt_local_route_upvotes', JSON.stringify(newUpvotes));
+      } catch (e) {
+        console.error("Failed to write local upvote", e);
+      }
+    } else {
+      try {
+        await setDoc(doc(db, 'route_upvotes', routeKey), {
+          routeKey,
+          votes: newVotes
+        });
+      } catch (error) {
+        handleFirestoreError(error, OperationType.WRITE, `route_upvotes/${routeKey}`);
+      }
     }
 
     const updatedVotedList = [...userVoted, routeKey];

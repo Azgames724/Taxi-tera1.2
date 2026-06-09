@@ -15,11 +15,26 @@ const envFirebaseConfig = {
 };
 
 const hasEnvConfig = !!(envFirebaseConfig.projectId && envFirebaseConfig.apiKey);
-const firebaseConfig = hasEnvConfig ? envFirebaseConfig : (localFirebaseConfig as any);
+const hasLocalConfig = !!(localFirebaseConfig && (localFirebaseConfig as any).projectId && (localFirebaseConfig as any).apiKey);
+
+export const isFirebaseConfigured = hasEnvConfig || hasLocalConfig;
+
+const placeholderConfig = {
+  apiKey: "AIzaSyDummyKeyForLocalMockingAndNoCrash123",
+  authDomain: "placeholder-project.firebaseapp.com",
+  projectId: "placeholder-project-id",
+  storageBucket: "placeholder-project.appspot.com",
+  messagingSenderId: "000000000000",
+  appId: "1:000000000000:web:000000000000"
+};
+
+const firebaseConfig = isFirebaseConfigured 
+  ? (hasEnvConfig ? envFirebaseConfig : (localFirebaseConfig as any)) 
+  : placeholderConfig;
 
 const app = initializeApp(firebaseConfig);
 // Fallback path in case firestoreDatabaseId isn't explicitly configured or loaded
-export const db = getFirestore(app, (firebaseConfig as any).firestoreDatabaseId || undefined);
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId || undefined);
 export const auth = getAuth();
 
 export enum OperationType {
@@ -48,7 +63,7 @@ export interface FirestoreErrorInfo {
   };
 }
 
-export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never | void {
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
@@ -60,11 +75,13 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
       providerInfo: auth.currentUser?.providerData?.map(provider => ({
         providerId: provider.providerId,
         email: provider.email,
-      })) || []
+              })) || []
     },
     operationType,
     path
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  console.warn('Firestore Warning/Error (Fallback Active if unconfigured): ', JSON.stringify(errInfo));
+  if (isFirebaseConfigured) {
+    throw new Error(JSON.stringify(errInfo));
+  }
 }
