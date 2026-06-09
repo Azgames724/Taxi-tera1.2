@@ -109,3 +109,4 @@ git clone https://github.com/Azgames724/Taxi-tera1.2.git
 cd Taxi-tera1.2
 npm install
 npm run dev
+
