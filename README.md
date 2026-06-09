@@ -4,3 +4,4 @@
 ![Leaflet](https://img.shields.io/badge/Leaflet-Mapping-199900)
 ![OpenStreetMap](https://img.shields.io/badge/OpenStreetMap-Data-7EBC6F)
 ![Status](https://img.shields.io/badge/Status-Active%20Development-success)
+![Taxi Tera](https://img.shields.io/badge/Taxi_Tera-Ethiopian_Transit-blue)
