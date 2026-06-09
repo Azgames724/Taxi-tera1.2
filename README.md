@@ -3,7 +3,7 @@
 > Interactive public transportation mapping platform for Ethiopia.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Azgames724/Taxi-tera1.2/main/assets/banner.png" width="100%" alt="Taxi Tera Banner">
+  <img src="https://raw.githubusercontent.com/Azgames724/Taxi-tera1.2/main/Picsart_26-06-09_20-32-03-314.png" width="100%" alt="Taxi Tera Banner">
 </p>
 
 <p align="center">
