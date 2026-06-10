@@ -164,8 +164,8 @@ npm run build
 
 ### Planned
 
-- [ ] Offline Maps
-- [ ] Favorite Stations
+- [x] Offline Maps
+- [x] Favorite Stations
 - [ ] Route Optimization
 - [ ] Better Search
 - [ ] Navigation Assistance
